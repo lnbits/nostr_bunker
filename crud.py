@@ -250,6 +250,7 @@ async def get_url_data_ids_by_bunkers_data_ids(
 
 
 async def update_url_data(data: UrlData) -> UrlData:
+    data.secret = data.secret or secrets.token_urlsafe(12)
     await db.update("nostr_bunker.url_data", data)
     return data
 
@@ -353,6 +354,21 @@ async def count_signing_requests_since(
         {"url_data_id": url_data_id, "since": since},
     )
     return int(row["count"]) if row else 0
+
+
+async def get_signing_requests_since(
+    url_data_id: str,
+    since: datetime,
+) -> list[SigningRequest]:
+    return await db.fetchall(
+        """
+            SELECT * FROM nostr_bunker.signing_requests
+            WHERE url_data_id = :url_data_id
+              AND created_at >= :since
+        """,
+        {"url_data_id": url_data_id, "since": since},
+        SigningRequest,
+    )
 
 
 async def get_signing_requests_paginated(

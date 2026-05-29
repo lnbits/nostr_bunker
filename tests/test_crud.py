@@ -3,6 +3,7 @@ from uuid import uuid4
 
 import pytest
 from coincurve import PrivateKey
+from fastapi.exceptions import HTTPException
 from lnbits.utils.nostr import sign_event
 from nostr_sdk import Keys, PublicKey, SecretKey, nip44_decrypt, nip44_encrypt, Nip44Version
 
@@ -37,20 +38,23 @@ from nostr_bunker.models import (  # type: ignore[import]
 )
 from nostr_bunker.services import (  # type: ignore[import]
     _refresh_runtime_state,
+    _assert_post_rate_limit,
     _handle_request_event,
     complete_signing_request_action,
     mark_runtime_state_dirty,
     runtime_state,
 )
+from nostr_bunker.views_api import api_delete_bunkers_data  # type: ignore[import]
 
 
 @pytest.mark.asyncio
 async def test_create_and_get_bunkers_data():
     user_id = uuid4().hex
+    bunker_secret_hex = Keys.generate().secret_key().to_hex()
 
     data = CreateBunkersData(
         name="name_NbHwALeTLSHooBFqVySAP6",
-        nsec="nsec_cgUm5k2QcAjej3shbRZTmW",
+        nsec=bunker_secret_hex,
     )
     bunkers_data_one = await create_bunkers_data(user_id, data)
     assert bunkers_data_one.id is not None
@@ -64,7 +68,7 @@ async def test_create_and_get_bunkers_data():
 
     data = CreateBunkersData(
         name="name_NbHwALeTLSHooBFqVySAP6",
-        nsec="nsec_cgUm5k2QcAjej3shbRZTmW",
+        nsec=bunker_secret_hex,
     )
     bunkers_data_two = await create_bunkers_data(user_id, data)
     assert bunkers_data_two.id is not None
@@ -89,10 +93,12 @@ async def test_create_and_get_bunkers_data():
 @pytest.mark.asyncio
 async def test_update_bunkers_data():
     user_id = uuid4().hex
+    bunker_secret_hex = Keys.generate().secret_key().to_hex()
+    updated_secret_hex = Keys.generate().secret_key().to_hex()
 
     data = CreateBunkersData(
         name="name_NbHwALeTLSHooBFqVySAP6",
-        nsec="nsec_cgUm5k2QcAjej3shbRZTmW",
+        nsec=bunker_secret_hex,
     )
     bunkers_data_one = await create_bunkers_data(user_id, data)
     assert bunkers_data_one.id is not None
@@ -106,7 +112,7 @@ async def test_update_bunkers_data():
 
     data_updated = CreateBunkersData(
         name="name_updated",
-        nsec="nsec_updated",
+        nsec=updated_secret_hex,
     )
     bunkers_data_updated = BunkersData(**{**bunkers_data_one.dict(), **data_updated.dict()})
 
@@ -121,7 +127,7 @@ async def test_create_update_and_delete_url_data():
     user_id = uuid4().hex
     bunker = await create_bunkers_data(
         user_id,
-        CreateBunkersData(name="bunker", nsec="nsec"),
+        CreateBunkersData(name="bunker", nsec=Keys.generate().secret_key().to_hex()),
     )
 
     data = CreateUrlData(
@@ -498,6 +504,92 @@ def test_mark_runtime_state_dirty_resets_refresh_timer():
     runtime_state.next_refresh_at = 12345
     mark_runtime_state_dirty()
     assert runtime_state.next_refresh_at == 0
+
+
+@pytest.mark.asyncio
+async def test_update_url_data_regenerates_blank_secret():
+    bunker = await create_bunkers_data(
+        uuid4().hex,
+        CreateBunkersData(name="bunker", nsec=Keys.generate().secret_key().to_hex()),
+    )
+    url_data = await create_url_data(
+        bunker.id,
+        CreateUrlData(
+            name="client",
+            relays=["wss://relay.example"],
+            permissions=["get_public_key"],
+            secret="wobble",
+        ),
+    )
+
+    url_data.secret = None
+    updated = await update_url_data(url_data)
+    assert updated.secret
+    assert updated.secret != "wobble"
+
+
+@pytest.mark.asyncio
+async def test_post_rate_limit_only_counts_kind_one_requests():
+    bunker = await create_bunkers_data(
+        uuid4().hex,
+        CreateBunkersData(name="bunker", nsec=Keys.generate().secret_key().to_hex()),
+    )
+    url_data = await create_url_data(
+        bunker.id,
+        CreateUrlData(
+            name="client",
+            relays=["wss://relay.example"],
+            permissions=["sign_event:1", "sign_event:4"],
+            can_write=True,
+            post_rate_limit_per_day=1,
+        ),
+    )
+
+    await create_signing_request(
+        url_data.id,
+        CreateSigningRequest(
+            request_id="dm-1",
+            client_pubkey="client",
+            event={"kind": 4, "content": "dm", "tags": [], "created_at": 1},
+        ),
+    )
+    await _assert_post_rate_limit(url_data, 1)
+
+    await create_signing_request(
+        url_data.id,
+        CreateSigningRequest(
+            request_id="post-1",
+            client_pubkey="client",
+            event={"kind": 1, "content": "post", "tags": [], "created_at": 1},
+        ),
+    )
+    with pytest.raises(PermissionError):
+        await _assert_post_rate_limit(url_data, 1)
+
+
+@pytest.mark.asyncio
+async def test_delete_bunker_requires_clear_flag_when_urls_exist():
+    user_id = uuid4().hex
+    bunker = await create_bunkers_data(
+        user_id,
+        CreateBunkersData(name="bunker", nsec=Keys.generate().secret_key().to_hex()),
+    )
+    await create_url_data(
+        bunker.id,
+        CreateUrlData(
+            name="client",
+            relays=["wss://relay.example"],
+            permissions=["get_public_key"],
+        ),
+    )
+
+    account = type("Account", (), {"id": user_id})()
+    with pytest.raises(HTTPException) as exc:
+        await api_delete_bunkers_data(bunker.id, False, account)
+    assert exc.value.status_code == 409
+
+    response = await api_delete_bunkers_data(bunker.id, True, account)
+    assert response.success is True
 
 
 def _build_nip46_request_event(

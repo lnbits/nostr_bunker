@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from lnbits.db import FilterModel
+from lnbits.utils.nostr import normalize_private_key
 from pydantic import BaseModel, Field, validator
 
 from .helpers import validate_relay_urls
@@ -10,6 +11,13 @@ from .helpers import validate_relay_urls
 class CreateBunkersData(BaseModel):
     name: str | None
     nsec: str | None
+
+    @validator("nsec")
+    def validate_nsec(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            raise ValueError("nsec is required.")
+        normalize_private_key(value.strip())
+        return value.strip()
 
 
 class BunkersData(BaseModel):
@@ -63,6 +71,13 @@ class CreateUrlData(BaseModel):
     @validator("relays")
     def validate_relays(cls, value: list[str]) -> list[str]:
         return validate_relay_urls(value)
+
+    @validator("secret")
+    def normalize_secret(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
 
 
 class UrlData(BaseModel):
@@ -125,6 +140,14 @@ class UpdateSigningRequest(BaseModel):
     status: str
     signed_event: dict | None = None
     error: str | None = None
+
+    @validator("status")
+    def validate_status(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        allowed = {"pending", "approved", "signed", "rejected", "error"}
+        if normalized not in allowed:
+            raise ValueError(f"status must be one of: {', '.join(sorted(allowed))}.")
+        return normalized
 
 
 class SigningRequest(BaseModel):

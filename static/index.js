@@ -542,8 +542,5 @@ window.PageNostrBunker = {
     this.getBunkersData()
     this.getUrlData()
     this.getSigningRequests()
-
-    
-    
   }
 }

@@ -48,12 +48,12 @@ except ModuleNotFoundError:
         nostr_client = _FallbackNostrClient()
 
 from .crud import (
-    count_signing_requests_since,
     create_signing_request,
     get_all_bunkers_data,
     get_bunkers_data_by_id,
     get_signing_request_by_id,
     get_signing_request_by_request_id,
+    get_signing_requests_since,
     get_url_data_by_bunkers_data_id,
     get_url_data_by_client_pubkey,
     get_url_data_by_id,
@@ -515,7 +515,8 @@ async def _assert_post_rate_limit(url_data: UrlData, kind: int) -> None:
         return
 
     since = datetime.now(timezone.utc) - timedelta(days=1)
-    count = await count_signing_requests_since(url_data.id, since)
+    recent_requests = await get_signing_requests_since(url_data.id, since)
+    count = sum(1 for request in recent_requests if int(request.event.get("kind", 0)) == 1)
     if count >= url_data.post_rate_limit_per_day:
         raise PermissionError("Daily post signing limit reached for this bunker URL.")
 

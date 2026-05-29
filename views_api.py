@@ -131,6 +131,18 @@ async def api_delete_bunkers_data(
     clear_url_data: bool | None = False,
     account_id: AccountId = Depends(check_account_id_exists),
 ) -> SimpleStatus:
+    bunkers_data = await get_bunkers_data(account_id.id, bunkers_data_id)
+    if not bunkers_data:
+        raise HTTPException(HTTPStatus.NOT_FOUND, "Bunkers Data not found.")
+
+    url_data_page = await get_url_data_paginated(
+        bunkers_data_ids=[bunkers_data_id],
+    )
+    if url_data_page.total and clear_url_data is not True:
+        raise HTTPException(
+            HTTPStatus.CONFLICT,
+            "Bunkers Data still has URL records. Delete with clear_url_data=true.",
+        )
 
     if clear_url_data is True:
         await delete_url_data_by_bunkers_data_id(bunkers_data_id)
