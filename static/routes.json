@@ -1,0 +1,14 @@
+[
+  {
+    "path": "/nostr_bunker/",
+    "name": "PageNostrBunker",
+    "template": "/nostr_bunker/static/index.vue",
+    "component": "/nostr_bunker/static/index.js"
+  },
+  {
+    "path": "/nostr_bunker/:id",
+    "name": "PageNostrBunkerPublic",
+    "template": "/nostr_bunker/static/public_page.vue",
+    "component": "/nostr_bunker/static/public_page.js"
+  }
+]

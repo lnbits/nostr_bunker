@@ -1,0 +1,9 @@
+{
+  "repos": [
+    {
+      "id": "nostr_bunker",
+      "organisation": "lnbits",
+      "repository": "nostr_bunker"
+    }
+  ]
+}
