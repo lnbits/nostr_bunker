@@ -1,6 +1,6 @@
 {
   "name": "Nostr Bunker",
-  "short_description": "Create & manage nostr urls",
+  "short_description": "Run a NIP-46 bunker with per-client signing policies",
   "tile": "/nostr_bunker/static/image/nostr_bunker.png",
   "version": "0.1.0",
   "min_lnbits_version": "1.4.2",

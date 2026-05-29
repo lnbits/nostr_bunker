@@ -1,4 +1,7 @@
-__pycache__
+__pycache__/
 node_modules
 .venv
 .mypy_cache
+.pytest_cache/
+.agents/
+.codex/
