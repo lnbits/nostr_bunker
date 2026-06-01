@@ -489,18 +489,13 @@
   label="Post rate limit per day"
   hint="Maximum write actions allowed per day"
 ></q-input>
-<div class="row q-col-gutter-sm">
-  <q-toggle
-    class="col-6"
-    v-model="urlDataFormDialog.data.auto_sign"
-    label="Auto sign"
-  ></q-toggle>
-  <q-toggle
-    class="col-6"
-    v-model="urlDataFormDialog.data.confirm_sign"
-    label="Confirm sign"
-  ></q-toggle>
-</div>
+<q-option-group
+  v-model="urlDataFormDialog.data.signing_mode"
+  :options="signingModeOptions"
+  color="primary"
+  inline
+  dense
+></q-option-group>
 <div class="text-caption text-grey q-mt-xs">
   Read and write access are derived from the capabilities above. Auto sign approves
   matching sign requests immediately. Confirm sign puts them in the pending

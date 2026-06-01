@@ -60,7 +60,10 @@ async def api_create_bunkers_data(
     data: CreateBunkersData,
     account_id: AccountId = Depends(check_account_id_exists),
 ) -> BunkersData:
-    bunkers_data = await create_bunkers_data(account_id.id, data)
+    try:
+        bunkers_data = await create_bunkers_data(account_id.id, data)
+    except ValueError as exc:
+        raise HTTPException(HTTPStatus.BAD_REQUEST, str(exc)) from exc
     mark_runtime_state_dirty()
     return bunkers_data
 
@@ -76,7 +79,10 @@ async def api_update_bunkers_data(
         raise HTTPException(HTTPStatus.NOT_FOUND, "Bunkers Data not found.")
     if bunkers_data.user_id != account_id.id:
         raise HTTPException(HTTPStatus.FORBIDDEN, "You do not own this bunkers data.")
-    bunkers_data = await update_bunkers_data(BunkersData(**{**bunkers_data.dict(), **data.dict()}))
+    try:
+        bunkers_data = await update_bunkers_data(BunkersData(**{**bunkers_data.dict(), **data.dict()}))
+    except ValueError as exc:
+        raise HTTPException(HTTPStatus.BAD_REQUEST, str(exc)) from exc
     mark_runtime_state_dirty()
     return bunkers_data
 

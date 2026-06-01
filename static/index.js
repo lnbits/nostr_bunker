@@ -41,6 +41,10 @@ window.PageNostrBunker = {
         {label: 'Read DMs', value: 'read_dms'},
         {label: 'Sign DMs', value: 'sign_dms'}
       ],
+      signingModeOptions: [
+        {label: 'Confirm', value: 'confirm'},
+        {label: 'Auto', value: 'auto'}
+      ],
       settingsFormDialog: {
         show: false,
         data: {}
@@ -155,6 +159,14 @@ window.PageNostrBunker = {
         this.getUrlData()
       }
     },
+    'urlDataFormDialog.data.capabilities': {
+      deep: true,
+      handler() {
+        if (this.urlDataFormDialog.show) {
+          this.syncUrlDataPermissionsFromCapabilities()
+        }
+      }
+    },
     'signingRequestTable.search': {
       handler() {
         this.getSigningRequests()
@@ -252,6 +264,7 @@ window.PageNostrBunker = {
         capabilities: ['read_profile', 'read_follows', 'read_posts'],
         relays: [],
         permissions: ['get_public_key', 'ping'],
+        signing_mode: 'confirm',
         auto_sign: false,
         confirm_sign: true,
         expires_at: null,
@@ -305,6 +318,23 @@ window.PageNostrBunker = {
       }
 
       return capabilities
+    },
+    inferSigningModeFromUrlData(data) {
+      if (data.auto_sign) {
+        return 'auto'
+      }
+      if (data.confirm_sign) {
+        return 'confirm'
+      }
+      return 'confirm'
+    },
+    applySigningModeToUrlData(data) {
+      const signingMode = data.signing_mode || 'confirm'
+      return {
+        ...data,
+        auto_sign: signingMode === 'auto',
+        confirm_sign: signingMode === 'confirm'
+      }
     },
     applyCapabilitiesToUrlData(data) {
       const capabilities = data.capabilities || []
@@ -381,6 +411,12 @@ window.PageNostrBunker = {
         )
       }
     },
+    syncUrlDataPermissionsFromCapabilities() {
+      const updatedData = this.applyCapabilitiesToUrlData(this.urlDataFormDialog.data)
+      this.urlDataFormDialog.data.permissions = updatedData.permissions
+      this.urlDataFormDialog.data.can_read = updatedData.can_read
+      this.urlDataFormDialog.data.can_write = updatedData.can_write
+    },
     async showNewUrlDataForm() {
       const bunker = this.bunkersDataList[0]
       this.urlDataFormDialog.bunkersData = bunker
@@ -394,6 +430,7 @@ window.PageNostrBunker = {
         ...this.defaultUrlData(),
         ...data,
         capabilities: this.inferCapabilitiesFromUrlData(data),
+        signing_mode: this.inferSigningModeFromUrlData(data),
         relays: data.relays || [],
         permissions: data.permissions || []
       }
@@ -402,10 +439,10 @@ window.PageNostrBunker = {
     async saveUrlData() {
       
       try {
-        const data = this.applyCapabilitiesToUrlData({
+        const data = this.applySigningModeToUrlData(this.applyCapabilitiesToUrlData({
           extra: {},
           ...this.urlDataFormDialog.data
-        })
+        }))
         const method = data.id ? 'PUT' : 'POST'
         const bunkerId = this.urlDataFormDialog.bunkersData.value
         const entry = data.id ? `/${data.id}` : `/${bunkerId}`

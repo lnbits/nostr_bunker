@@ -5,7 +5,7 @@ import pytest
 from coincurve import PrivateKey
 from fastapi.exceptions import HTTPException
 from lnbits.utils.nostr import sign_event
-from nostr_sdk import Keys, PublicKey, SecretKey, nip44_decrypt, nip44_encrypt, Nip44Version
+from nostr_sdk import Keys, Nip44Version, PublicKey, SecretKey, nip44_decrypt, nip44_encrypt
 
 from nostr_bunker.crud import (  # type: ignore[import]
     create_bunkers_data,
@@ -23,8 +23,8 @@ from nostr_bunker.crud import (  # type: ignore[import]
     get_url_data_by_id,
     get_url_data_ids_by_bunkers_data_ids,
     get_url_data_paginated,
-    update_signing_request,
     update_bunkers_data,
+    update_signing_request,
     update_url_data,
 )
 from nostr_bunker.helpers import derive_remote_signer_pubkey  # type: ignore[import]
@@ -37,9 +37,9 @@ from nostr_bunker.models import (  # type: ignore[import]
     UrlData,
 )
 from nostr_bunker.services import (  # type: ignore[import]
-    _refresh_runtime_state,
     _assert_post_rate_limit,
     _handle_request_event,
+    _refresh_runtime_state,
     complete_signing_request_action,
     mark_runtime_state_dirty,
     runtime_state,
@@ -70,24 +70,23 @@ async def test_create_and_get_bunkers_data():
         name="name_NbHwALeTLSHooBFqVySAP6",
         nsec=bunker_secret_hex,
     )
-    bunkers_data_two = await create_bunkers_data(user_id, data)
-    assert bunkers_data_two.id is not None
-    assert bunkers_data_two.user_id == user_id
+    with pytest.raises(ValueError, match="already exists"):
+        await create_bunkers_data(user_id, data)
 
-    bunkers_data_list = await get_bunkers_data_ids_by_user(user_id=user_id)
-    assert len(bunkers_data_list) == 2
-
-    bunkers_data_page = await get_bunkers_data_paginated(user_id=user_id)
-    assert bunkers_data_page.total == 2
-    assert len(bunkers_data_page.data) == 2
-
-    await delete_bunkers_data(user_id, bunkers_data_one.id)
     bunkers_data_list = await get_bunkers_data_ids_by_user(user_id=user_id)
     assert len(bunkers_data_list) == 1
 
     bunkers_data_page = await get_bunkers_data_paginated(user_id=user_id)
     assert bunkers_data_page.total == 1
     assert len(bunkers_data_page.data) == 1
+
+    await delete_bunkers_data(user_id, bunkers_data_one.id)
+    bunkers_data_list = await get_bunkers_data_ids_by_user(user_id=user_id)
+    assert len(bunkers_data_list) == 0
+
+    bunkers_data_page = await get_bunkers_data_paginated(user_id=user_id)
+    assert bunkers_data_page.total == 0
+    assert len(bunkers_data_page.data) == 0
 
 
 @pytest.mark.asyncio
@@ -120,6 +119,31 @@ async def test_update_bunkers_data():
     bunkers_data_one = await get_bunkers_data_by_id(bunkers_data_one.id)
     assert bunkers_data_one.name == bunkers_data_updated.name
     assert bunkers_data_one.nsec == bunkers_data_updated.nsec
+
+
+@pytest.mark.asyncio
+async def test_update_bunkers_data_rejects_duplicate_nsec():
+    user_id = uuid4().hex
+    first_secret_hex = Keys.generate().secret_key().to_hex()
+    second_secret_hex = Keys.generate().secret_key().to_hex()
+
+    await create_bunkers_data(
+        user_id,
+        CreateBunkersData(name="first", nsec=first_secret_hex),
+    )
+    second_bunker = await create_bunkers_data(
+        user_id,
+        CreateBunkersData(name="second", nsec=second_secret_hex),
+    )
+
+    duplicate_bunker = BunkersData(
+        **{**second_bunker.dict(), "nsec": first_secret_hex},
+    )
+    with pytest.raises(ValueError, match="already exists"):
+        await update_bunkers_data(duplicate_bunker)
+
+    fetched = await get_bunkers_data_by_id(second_bunker.id)
+    assert fetched.nsec == second_secret_hex
 
 
 @pytest.mark.asyncio
@@ -183,6 +207,34 @@ async def test_create_update_and_delete_url_data():
 
     await delete_url_data(bunker.id, url_data.id)
     assert await get_url_data_by_id(url_data.id) is None
+
+
+@pytest.mark.asyncio
+async def test_url_data_auto_sign_disables_confirm_sign():
+    user_id = uuid4().hex
+    bunker = await create_bunkers_data(
+        user_id,
+        CreateBunkersData(name="bunker", nsec=Keys.generate().secret_key().to_hex()),
+    )
+
+    url_data = await create_url_data(
+        bunker.id,
+        CreateUrlData(
+            name="auto signer",
+            relays=["wss://relay.example"],
+            permissions=["sign_event:1"],
+            auto_sign=True,
+            confirm_sign=True,
+            can_write=True,
+        ),
+    )
+    assert url_data.auto_sign is True
+    assert url_data.confirm_sign is False
+
+    url_data.confirm_sign = True
+    updated = await update_url_data(url_data)
+    assert updated.auto_sign is True
+    assert updated.confirm_sign is False
 
 
 @pytest.mark.asyncio

@@ -23,9 +23,23 @@ db = Database("ext_nostr_bunker")
 
 ########################### Bunkers Data ############################
 async def create_bunkers_data(user_id: str, data: CreateBunkersData) -> BunkersData:
+    await assert_unique_bunker_nsec(data.nsec)
     bunkers_data = BunkersData(**data.dict(), id=urlsafe_short_hash(), user_id=user_id)
     await db.insert("nostr_bunker.bunkers_data", bunkers_data)
     return bunkers_data
+
+
+async def assert_unique_bunker_nsec(nsec: str | None, exclude_id: str | None = None) -> None:
+    remote_signer_pubkey = derive_remote_signer_pubkey(nsec)
+    if not remote_signer_pubkey:
+        return
+
+    bunkers = await get_all_bunkers_data()
+    for bunker in bunkers:
+        if bunker.id == exclude_id:
+            continue
+        if derive_remote_signer_pubkey(bunker.nsec) == remote_signer_pubkey:
+            raise ValueError("A bunker with this nsec already exists.")
 
 
 async def get_bunkers_data(
@@ -98,6 +112,7 @@ async def get_all_bunkers_data() -> list[BunkersData]:
 
 
 async def update_bunkers_data(data: BunkersData) -> BunkersData:
+    await assert_unique_bunker_nsec(data.nsec, exclude_id=data.id)
     await db.update("nostr_bunker.bunkers_data", data)
     return data
 
@@ -118,6 +133,7 @@ async def delete_bunkers_data(user_id: str, bunkers_data_id: str) -> None:
 async def create_url_data(bunkers_data_id: str, data: CreateUrlData) -> UrlData:
     payload = data.dict()
     payload["secret"] = payload.get("secret") or secrets.token_urlsafe(12)
+    normalize_url_signing_policy(payload)
     url_data = UrlData(
         **payload,
         id=urlsafe_short_hash(),
@@ -251,8 +267,15 @@ async def get_url_data_ids_by_bunkers_data_ids(
 
 async def update_url_data(data: UrlData) -> UrlData:
     data.secret = data.secret or secrets.token_urlsafe(12)
+    if data.auto_sign:
+        data.confirm_sign = False
     await db.update("nostr_bunker.url_data", data)
     return data
+
+
+def normalize_url_signing_policy(payload: dict) -> None:
+    if payload.get("auto_sign"):
+        payload["confirm_sign"] = False
 
 
 async def delete_url_data(bunkers_data_id: str, url_data_id: str) -> None:
