@@ -4,7 +4,7 @@ from datetime import datetime
 from lnbits.db import Database, Filters, Page
 from lnbits.helpers import urlsafe_short_hash
 
-from .helpers import build_bunker_url, derive_remote_signer_pubkey
+from .helpers import build_bunker_url, decrypt_nsec, derive_remote_signer_pubkey, encrypt_nsec
 from .models import (
     BunkersData,
     BunkersDataFilters,
@@ -21,11 +21,22 @@ from .models import (
 db = Database("ext_nostr_bunker")
 
 
+def _decrypt_bunker(bunker: BunkersData) -> BunkersData:
+    # Signer keys are stored encrypted at rest; expose the plaintext nsec to the
+    # rest of the extension transparently.
+    return bunker.copy(update={"nsec": decrypt_nsec(bunker.nsec)})
+
+
+def _decrypt_bunker_optional(bunker: BunkersData | None) -> BunkersData | None:
+    return _decrypt_bunker(bunker) if bunker else None
+
+
 ########################### Bunkers Data ############################
 async def create_bunkers_data(user_id: str, data: CreateBunkersData) -> BunkersData:
     await assert_unique_bunker_nsec(data.nsec)
     bunkers_data = BunkersData(**data.dict(), id=urlsafe_short_hash(), user_id=user_id)
-    await db.insert("nostr_bunker.bunkers_data", bunkers_data)
+    stored = bunkers_data.copy(update={"nsec": encrypt_nsec(bunkers_data.nsec)})
+    await db.insert("nostr_bunker.bunkers_data", stored)
     return bunkers_data
 
 
@@ -46,26 +57,30 @@ async def get_bunkers_data(
     user_id: str,
     bunkers_data_id: str,
 ) -> BunkersData | None:
-    return await db.fetchone(
-        """
-            SELECT * FROM nostr_bunker.bunkers_data
-            WHERE id = :id AND user_id = :user_id
-        """,
-        {"id": bunkers_data_id, "user_id": user_id},
-        BunkersData,
+    return _decrypt_bunker_optional(
+        await db.fetchone(
+            """
+                SELECT * FROM nostr_bunker.bunkers_data
+                WHERE id = :id AND user_id = :user_id
+            """,
+            {"id": bunkers_data_id, "user_id": user_id},
+            BunkersData,
+        )
     )
 
 
 async def get_bunkers_data_by_id(
     bunkers_data_id: str,
 ) -> BunkersData | None:
-    return await db.fetchone(
-        """
-            SELECT * FROM nostr_bunker.bunkers_data
-            WHERE id = :id
-        """,
-        {"id": bunkers_data_id},
-        BunkersData,
+    return _decrypt_bunker_optional(
+        await db.fetchone(
+            """
+                SELECT * FROM nostr_bunker.bunkers_data
+                WHERE id = :id
+            """,
+            {"id": bunkers_data_id},
+            BunkersData,
+        )
     )
 
 
@@ -93,27 +108,31 @@ async def get_bunkers_data_paginated(
         where.append("user_id = :user_id")
         values["user_id"] = user_id
 
-    return await db.fetch_page(
+    page = await db.fetch_page(
         "SELECT * FROM nostr_bunker.bunkers_data",
         where=where,
         values=values,
         filters=filters,
         model=BunkersData,
     )
+    page.data = [_decrypt_bunker(bunker) for bunker in page.data]
+    return page
 
 
 async def get_all_bunkers_data() -> list[BunkersData]:
-    return await db.fetchall(
+    bunkers = await db.fetchall(
         """
             SELECT * FROM nostr_bunker.bunkers_data
         """,
         model=BunkersData,
     )
+    return [_decrypt_bunker(bunker) for bunker in bunkers]
 
 
 async def update_bunkers_data(data: BunkersData) -> BunkersData:
     await assert_unique_bunker_nsec(data.nsec, exclude_id=data.id)
-    await db.update("nostr_bunker.bunkers_data", data)
+    stored = data.copy(update={"nsec": encrypt_nsec(data.nsec)})
+    await db.update("nostr_bunker.bunkers_data", stored)
     return data
 
 

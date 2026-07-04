@@ -4,7 +4,8 @@ import re
 from urllib.parse import quote
 
 from coincurve import PrivateKey
-from lnbits.utils.nostr import normalize_private_key, is_ws_url
+from lnbits.helpers import decrypt_internal_message, encrypt_internal_message
+from lnbits.utils.nostr import is_ws_url, normalize_private_key
 
 
 def is_valid_email_address(email: str) -> bool:
@@ -21,6 +22,33 @@ def derive_remote_signer_pubkey(nsec: str | None) -> str | None:
         return public_key[2:]
     except Exception:
         return None
+
+
+def encrypt_nsec(nsec: str | None) -> str | None:
+    if not nsec:
+        return nsec
+    return encrypt_internal_message(nsec)
+
+
+def decrypt_nsec(stored_nsec: str | None) -> str | None:
+    # Transparently decrypt a stored signer key, tolerating legacy plaintext
+    # rows written before at-rest encryption was introduced.
+    if not stored_nsec:
+        return stored_nsec
+    try:
+        decrypted = decrypt_internal_message(stored_nsec)
+    except Exception:
+        decrypted = None
+    if decrypted:
+        # lnbits' AESCipher can leave PKCS7 padding bytes on block-aligned
+        # plaintext; strip control characters before validating.
+        candidate = "".join(char for char in decrypted if char >= " ")
+        try:
+            normalize_private_key(candidate)
+            return candidate
+        except Exception:
+            return stored_nsec
+    return stored_nsec
 
 
 def validate_relay_urls(relays: list[str]) -> list[str]:

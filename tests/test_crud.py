@@ -11,6 +11,7 @@ from nostr_bunker.crud import (  # type: ignore[import]
     create_bunkers_data,
     create_signing_request,
     create_url_data,
+    db,
     delete_bunkers_data,
     delete_url_data,
     enrich_url_data,
@@ -87,6 +88,32 @@ async def test_create_and_get_bunkers_data():
     bunkers_data_page = await get_bunkers_data_paginated(user_id=user_id)
     assert bunkers_data_page.total == 0
     assert len(bunkers_data_page.data) == 0
+
+
+@pytest.mark.asyncio
+async def test_bunker_nsec_encrypted_at_rest():
+    user_id = uuid4().hex
+    bunker_secret_hex = Keys.generate().secret_key().to_hex()
+
+    bunker = await create_bunkers_data(
+        user_id,
+        CreateBunkersData(name="at_rest", nsec=bunker_secret_hex),
+    )
+
+    # The signer key must not be stored in plaintext.
+    row = await db.fetchone(
+        "SELECT nsec FROM nostr_bunker.bunkers_data WHERE id = :id",
+        {"id": bunker.id},
+    )
+    assert row is not None
+    assert row["nsec"] != bunker_secret_hex
+
+    # Reads transparently decrypt back to the original key.
+    fetched = await get_bunkers_data(user_id, bunker.id)
+    assert fetched is not None
+    assert fetched.nsec == bunker_secret_hex
+
+    await delete_bunkers_data(user_id, bunker.id)
 
 
 @pytest.mark.asyncio
