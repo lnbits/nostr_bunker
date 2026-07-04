@@ -93,3 +93,25 @@ async def m006_url_client_pubkey(db):
     """
 
     await db.execute("ALTER TABLE nostr_bunker.url_data ADD COLUMN client_pubkey TEXT;")
+
+
+async def m007_encrypt_bunker_nsec(db):
+    """
+    Encrypt bunker signer keys at rest.
+
+    Older rows stored the nsec in plaintext. Re-store each one encrypted with the
+    instance key. Idempotent: rows that already decrypt to a valid key are left
+    untouched, so re-running is safe.
+    """
+
+    from .helpers import decrypt_nsec, encrypt_nsec
+
+    rows: list[dict] = await db.fetchall("SELECT id, nsec FROM nostr_bunker.bunkers_data")
+    for row in rows:
+        nsec = row["nsec"]
+        if not nsec or decrypt_nsec(nsec) != nsec:
+            continue
+        await db.execute(
+            "UPDATE nostr_bunker.bunkers_data SET nsec = :nsec WHERE id = :id",
+            {"nsec": encrypt_nsec(nsec), "id": row["id"]},
+        )
