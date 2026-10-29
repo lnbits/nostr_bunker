@@ -62,11 +62,28 @@ window.PageNostrBunker = {
         search: '',
         loading: false,
         columns: [
-          {"name": "name", "align": "left", "label": "Name", "field": "name", "sortable": true},
-          {"name": "nsec", "align": "left", "label": "Nsec", "field": "nsec", "sortable": true},
-          {"name": "updated_at", "align": "left", "label": "Updated At", "field": "updated_at", "sortable": true},
-          {"name": "id", "align": "left", "label": "ID", "field": "id", "sortable": true},
-          
+          {
+            name: 'name',
+            align: 'left',
+            label: 'Name',
+            field: 'name',
+            sortable: true
+          },
+          {
+            name: 'nsec',
+            align: 'left',
+            label: 'Nsec',
+            field: 'nsec',
+            sortable: true
+          },
+          {
+            name: 'updated_at',
+            align: 'left',
+            label: 'Updated At',
+            field: 'updated_at',
+            sortable: true
+          },
+          {name: 'id', align: 'left', label: 'ID', field: 'id', sortable: true}
         ],
         pagination: {
           sortBy: 'updated_at',
@@ -87,18 +104,77 @@ window.PageNostrBunker = {
         search: '',
         loading: false,
         columns: [
-          {"name": "name", "align": "left", "label": "Name", "field": "name", "sortable": true},
-          {"name": "relays", "align": "left", "label": "Relays", "field": row => (row.relays || []).join(', '), "sortable": false},
-          {"name": "permissions", "align": "left", "label": "Permissions", "field": "permissions", "sortable": true},
-          {"name": "auto_sign", "align": "left", "label": "Auto", "field": "auto_sign", "sortable": true},
-          {"name": "confirm_sign", "align": "left", "label": "Confirm", "field": "confirm_sign", "sortable": true},
-          {"name": "expires_at", "align": "left", "label": "Expires", "field": "expires_at", "sortable": true},
-          {"name": "can_read", "align": "left", "label": "Read", "field": "can_read", "sortable": true},
-          {"name": "can_write", "align": "left", "label": "Write", "field": "can_write", "sortable": true},
-          {"name": "post_rate_limit_per_day", "align": "left", "label": "Daily Limit", "field": "post_rate_limit_per_day", "sortable": true},
-          {"name": "updated_at", "align": "left", "label": "Updated At", "field": "updated_at", "sortable": true},
-          {"name": "id", "align": "left", "label": "ID", "field": "id", "sortable": true},
-          
+          {
+            name: 'name',
+            align: 'left',
+            label: 'Name',
+            field: 'name',
+            sortable: true
+          },
+          {
+            name: 'relays',
+            align: 'left',
+            label: 'Relays',
+            field: row => (row.relays || []).join(', '),
+            sortable: false
+          },
+          {
+            name: 'permissions',
+            align: 'left',
+            label: 'Permissions',
+            field: 'permissions',
+            sortable: true
+          },
+          {
+            name: 'auto_sign',
+            align: 'left',
+            label: 'Auto',
+            field: 'auto_sign',
+            sortable: true
+          },
+          {
+            name: 'confirm_sign',
+            align: 'left',
+            label: 'Confirm',
+            field: 'confirm_sign',
+            sortable: true
+          },
+          {
+            name: 'expires_at',
+            align: 'left',
+            label: 'Expires',
+            field: 'expires_at',
+            sortable: true
+          },
+          {
+            name: 'can_read',
+            align: 'left',
+            label: 'Read',
+            field: 'can_read',
+            sortable: true
+          },
+          {
+            name: 'can_write',
+            align: 'left',
+            label: 'Write',
+            field: 'can_write',
+            sortable: true
+          },
+          {
+            name: 'post_rate_limit_per_day',
+            align: 'left',
+            label: 'Daily Limit',
+            field: 'post_rate_limit_per_day',
+            sortable: true
+          },
+          {
+            name: 'updated_at',
+            align: 'left',
+            label: 'Updated At',
+            field: 'updated_at',
+            sortable: true
+          },
+          {name: 'id', align: 'left', label: 'ID', field: 'id', sortable: true}
         ],
         pagination: {
           sortBy: 'updated_at',
@@ -114,12 +190,42 @@ window.PageNostrBunker = {
         search: '',
         loading: false,
         columns: [
-          {"name": "request_id", "align": "left", "label": "Request", "field": "request_id", "sortable": true},
-          {"name": "client_pubkey", "align": "left", "label": "Client", "field": "client_pubkey", "sortable": true},
-          {"name": "status", "align": "left", "label": "Status", "field": "status", "sortable": true},
-          {"name": "expires_at", "align": "left", "label": "Expires", "field": "expires_at", "sortable": true},
-          {"name": "updated_at", "align": "left", "label": "Updated At", "field": "updated_at", "sortable": true},
-          {"name": "id", "align": "left", "label": "ID", "field": "id", "sortable": true}
+          {
+            name: 'request_id',
+            align: 'left',
+            label: 'Request',
+            field: 'request_id',
+            sortable: true
+          },
+          {
+            name: 'client_pubkey',
+            align: 'left',
+            label: 'Client',
+            field: 'client_pubkey',
+            sortable: true
+          },
+          {
+            name: 'status',
+            align: 'left',
+            label: 'Status',
+            field: 'status',
+            sortable: true
+          },
+          {
+            name: 'expires_at',
+            align: 'left',
+            label: 'Expires',
+            field: 'expires_at',
+            sortable: true
+          },
+          {
+            name: 'updated_at',
+            align: 'left',
+            label: 'Updated At',
+            field: 'updated_at',
+            sortable: true
+          },
+          {name: 'id', align: 'left', label: 'ID', field: 'id', sortable: true}
         ],
         pagination: {
           sortBy: 'updated_at',
@@ -175,12 +281,11 @@ window.PageNostrBunker = {
   },
 
   methods: {
-
     //////////////// Bunkers Data ////////////////////////
     async showNewBunkersDataForm() {
       this.bunkersDataFormDialog.data = {
-          name: null,
-          nsec: null
+        name: null,
+        nsec: null
       }
       this.bunkersDataFormDialog.show = true
     },
@@ -193,7 +298,6 @@ window.PageNostrBunker = {
       this.bunkersDataFormDialog.show = true
     },
     async saveBunkersData() {
-      
       try {
         const data = {extra: {}, ...this.bunkersDataFormDialog.data}
         const method = data.id ? 'PUT' : 'POST'
@@ -212,7 +316,6 @@ window.PageNostrBunker = {
     },
 
     async getBunkersData(props) {
-      
       try {
         this.bunkersDataTable.loading = true
         const params = LNbits.utils.prepareFilterQuery(
@@ -237,7 +340,6 @@ window.PageNostrBunker = {
         .confirmDialog('Are you sure you want to delete this Bunkers Data?')
         .onOk(async () => {
           try {
-            
             await LNbits.api.request(
               'DELETE',
               '/nostr_bunker/api/v1/bunkers_data/' + bunkersDataId,
@@ -356,7 +458,9 @@ window.PageNostrBunker = {
         'sign_event:1059'
       ])
       const permissions = new Set(
-        (data.permissions || []).filter(permission => !managedPermissions.has(permission))
+        (data.permissions || []).filter(
+          permission => !managedPermissions.has(permission)
+        )
       )
 
       permissions.add('get_public_key')
@@ -396,7 +500,9 @@ window.PageNostrBunker = {
         ...data,
         permissions: Array.from(permissions),
         can_read: capabilities.some(capability =>
-          ['read_profile', 'read_follows', 'read_posts', 'read_dms'].includes(capability)
+          ['read_profile', 'read_follows', 'read_posts', 'read_dms'].includes(
+            capability
+          )
         ),
         can_write: capabilities.some(capability =>
           [
@@ -412,7 +518,9 @@ window.PageNostrBunker = {
       }
     },
     syncUrlDataPermissionsFromCapabilities() {
-      const updatedData = this.applyCapabilitiesToUrlData(this.urlDataFormDialog.data)
+      const updatedData = this.applyCapabilitiesToUrlData(
+        this.urlDataFormDialog.data
+      )
       this.urlDataFormDialog.data.permissions = updatedData.permissions
       this.urlDataFormDialog.data.can_read = updatedData.can_read
       this.urlDataFormDialog.data.can_write = updatedData.can_write
@@ -437,12 +545,13 @@ window.PageNostrBunker = {
       this.urlDataFormDialog.show = true
     },
     async saveUrlData() {
-      
       try {
-        const data = this.applySigningModeToUrlData(this.applyCapabilitiesToUrlData({
-          extra: {},
-          ...this.urlDataFormDialog.data
-        }))
+        const data = this.applySigningModeToUrlData(
+          this.applyCapabilitiesToUrlData({
+            extra: {},
+            ...this.urlDataFormDialog.data
+          })
+        )
         const method = data.id ? 'PUT' : 'POST'
         const bunkerId = this.urlDataFormDialog.bunkersData.value
         const entry = data.id ? `/${data.id}` : `/${bunkerId}`
@@ -460,13 +569,9 @@ window.PageNostrBunker = {
     },
 
     async getUrlData(props) {
-      
       try {
         this.urlDataTable.loading = true
-        let params = LNbits.utils.prepareFilterQuery(
-          this.urlDataTable,
-          props
-        )
+        let params = LNbits.utils.prepareFilterQuery(this.urlDataTable, props)
         const bunkersDataId = this.urlDataFormDialog.bunkersData.value
         if (bunkersDataId) {
           params += `&bunkers_data_id=${bunkersDataId}`
@@ -490,7 +595,6 @@ window.PageNostrBunker = {
         .confirmDialog('Are you sure you want to delete this Url Data?')
         .onOk(async () => {
           try {
-            
             await LNbits.api.request(
               'DELETE',
               '/nostr_bunker/api/v1/url_data/' + urlDataId,
@@ -512,7 +616,9 @@ window.PageNostrBunker = {
     },
     async copyBunkerUrl(urlData) {
       if (!urlData.bunker_url) {
-        LNbits.utils.notifyApiError(new Error('No bunker URL available for this record.'))
+        LNbits.utils.notifyApiError(
+          new Error('No bunker URL available for this record.')
+        )
         return
       }
       await navigator.clipboard.writeText(urlData.bunker_url)

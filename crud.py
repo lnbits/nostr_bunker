@@ -1,5 +1,7 @@
 import secrets
+from collections.abc import Mapping
 from datetime import datetime
+from typing import Any
 
 from lnbits.db import Database, Filters, Page
 from lnbits.helpers import urlsafe_short_hash
@@ -24,7 +26,7 @@ db = Database("ext_nostr_bunker")
 ########################### Bunkers Data ############################
 async def create_bunkers_data(user_id: str, data: CreateBunkersData) -> BunkersData:
     await assert_unique_bunker_nsec(data.nsec)
-    bunkers_data = BunkersData(**data.dict(), id=urlsafe_short_hash(), user_id=user_id)
+    bunkers_data = BunkersData(**data.model_dump(), id=urlsafe_short_hash(), user_id=user_id)
     await db.insert("nostr_bunker.bunkers_data", bunkers_data)
     return bunkers_data
 
@@ -131,7 +133,7 @@ async def delete_bunkers_data(user_id: str, bunkers_data_id: str) -> None:
 
 
 async def create_url_data(bunkers_data_id: str, data: CreateUrlData) -> UrlData:
-    payload = data.dict()
+    payload = data.model_dump()
     payload["secret"] = payload.get("secret") or secrets.token_urlsafe(12)
     normalize_url_signing_policy(payload)
     url_data = UrlData(
@@ -313,7 +315,7 @@ async def delete_url_data_by_bunkers_data_id(bunkers_data_id: str) -> None:
 
 async def create_signing_request(url_data_id: str, data: CreateSigningRequest) -> SigningRequest:
     signing_request = SigningRequest(
-        **data.dict(),
+        **data.model_dump(),
         id=urlsafe_short_hash(),
         url_data_id=url_data_id,
     )
@@ -367,7 +369,7 @@ async def count_signing_requests_since(
     url_data_id: str,
     since: datetime,
 ) -> int:
-    row = await db.fetchone(
+    row: Mapping[str, Any] | None = await db.fetchone(
         """
             SELECT COUNT(*) AS count
             FROM nostr_bunker.signing_requests

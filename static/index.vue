@@ -1,18 +1,11 @@
 <template id="page-nostr_bunker">
   <div class="row q-col-gutter-md">
     <div class="col-12 col-md-8 col-lg-7 q-gutter-y-md">
-    
-
       <div class="q-mt-lg">
         <span class="text-h5">Bunkers Data</span>
       </div>
-      <q-card
-        id="bunkersDataCard"
-        class="q-mt-xs"
-      >
-        <q-card-section
-          class=""
-        >
+      <q-card id="bunkersDataCard" class="q-mt-xs">
+        <q-card-section class="">
           <div class="row items-center no-wrap q-mb-md">
             <div class="col">
               <q-input
@@ -36,7 +29,6 @@
               </q-input>
             </div>
             <div class="col-auto">
-              
               <q-btn
                 @click="showNewBunkersDataForm()"
                 unelevated
@@ -45,7 +37,7 @@
               >
                 New Bunkers Data
               </q-btn>
-              
+
               <q-btn
                 flat
                 color="grey"
@@ -77,7 +69,6 @@
             <template v-slot:body="props">
               <q-tr :props="props">
                 <q-td auto-width>
-                   
                   <q-btn
                     flat
                     dense
@@ -89,7 +80,7 @@
                   >
                     <q-tooltip> Edit </q-tooltip>
                   </q-btn>
-                  
+
                   <q-btn
                     flat
                     dense
@@ -118,13 +109,8 @@
       <div class="q-mt-lg">
         <span class="text-h5">Url Data</span>
       </div>
-      <q-card
-        id="urlDataCard"
-        class="q-mt-xs"
-      >
-        <q-card-section
-          class=""
-        >
+      <q-card id="urlDataCard" class="q-mt-xs">
+        <q-card-section class="">
           <div class="row items-center no-wrap q-mb-md">
             <div class="col">
               <q-input
@@ -219,7 +205,7 @@
                   >
                     <q-tooltip> Copy bunker URL </q-tooltip>
                   </q-btn>
-                  
+
                   <q-btn
                     flat
                     dense
@@ -231,7 +217,7 @@
                   >
                     <q-tooltip> Edit </q-tooltip>
                   </q-btn>
-                  
+
                   <q-btn
                     flat
                     dense
@@ -324,7 +310,7 @@
         </q-card-section>
       </q-card>
     </div>
-    
+
     <div class="col-12 col-md-4 col-lg-5 q-gutter-y-md">
       <q-card>
         <q-card-section>
@@ -356,12 +342,10 @@
         </q-card-section>
       </q-card>
     </div>
-    
 
     <!--/////////////////////////////////////////////////-->
     <!--//////////////FORM DIALOG////////////////////////-->
     <!--/////////////////////////////////////////////////-->
-
 
     <q-dialog v-model="bunkersDataFormDialog.show" position="top">
       <q-card
@@ -370,23 +354,22 @@
       >
         <span class="text-h5">Bunkers Data</span>
 
-       
-<q-input
-  filled
-  dense
-  v-model.trim="bunkersDataFormDialog.data.name"
-  label="Name"
-  hint="  (optional)"
-></q-input>
-  
-<q-input
-  filled
-  dense
-  v-model.trim="bunkersDataFormDialog.data.nsec"
-  label="Nsec"
-  hint="  (optional)"
-></q-input>
- 
+        <q-input
+          filled
+          dense
+          v-model.trim="bunkersDataFormDialog.data.name"
+          label="Name"
+          hint="  (optional)"
+        ></q-input>
+
+        <q-input
+          filled
+          dense
+          v-model.trim="bunkersDataFormDialog.data.nsec"
+          label="Nsec"
+          hint="  (optional)"
+        ></q-input>
+
         <div class="row q-mt-lg">
           <q-btn @click="saveBunkersData" unelevated color="primary">
             <span v-if="bunkersDataFormDialog.data.id">Update</span>
@@ -406,102 +389,103 @@
       >
         <span class="text-h5">Url Data</span>
 
-       
-<q-input
-  filled
-  dense
-  v-model.trim="urlDataFormDialog.data.name"
-  label="Name"
-  hint="  (optional)"
-></q-input>
-<q-select
-  v-if="!urlDataFormDialog.data.id"
-  filled
-  dense
-  v-model="urlDataFormDialog.bunkersData"
-  :options="bunkersDataList.map(x => ({label: x.name || x.id, value: x.id}))"
-  label="Bunker"
-></q-select>
-<div class="text-subtitle2 q-mt-sm">Client capabilities</div>
-<q-option-group
-  v-model="urlDataFormDialog.data.capabilities"
-  :options="capabilityOptions"
-  type="checkbox"
-  color="primary"
-></q-option-group>
-<div class="text-caption text-grey q-mt-xs q-mb-sm">
-  Pick what this client should be able to do. The bunker will translate these into
-  the underlying NIP-46 permissions automatically.
-</div>
-<q-select
-  filled
-  dense
-  multiple
-  use-input
-  use-chips
-  new-value-mode="add-unique"
-  :options="relayOptions"
-  v-model="urlDataFormDialog.data.relays"
-  label="Relay URLs"
-  hint="Required for the bunker:// invite URL"
-></q-select>
-<q-expansion-item
-  dense
-  dense-toggle
-  icon="tune"
-  label="Advanced NIP-46 permissions"
-  class="q-mb-sm"
->
-  <q-select
-    filled
-    dense
-    multiple
-    use-input
-    use-chips
-    new-value-mode="add-unique"
-    :options="permissionOptions"
-    v-model="urlDataFormDialog.data.permissions"
-    label="Raw permissions"
-    hint="Optional advanced override, for example sign_event:30023"
-  ></q-select>
-</q-expansion-item>
-<q-input
-  filled
-  dense
-  v-model.trim="urlDataFormDialog.data.secret"
-  label="Secret"
-  hint="Optional shared secret returned during connect"
-></q-input>
-<q-input
-  filled
-  dense
-  type="datetime-local"
-  v-model="urlDataFormDialog.data.expires_at"
-  label="Expires at"
-  hint="Optional expiration for this bunker URL"
-></q-input>
-<q-input
-  filled
-  dense
-  type="number"
-  min="0"
-  v-model.number="urlDataFormDialog.data.post_rate_limit_per_day"
-  label="Post rate limit per day"
-  hint="Maximum write actions allowed per day"
-></q-input>
-<q-option-group
-  v-model="urlDataFormDialog.data.signing_mode"
-  :options="signingModeOptions"
-  color="primary"
-  inline
-  dense
-></q-option-group>
-<div class="text-caption text-grey q-mt-xs">
-  Read and write access are derived from the capabilities above. Auto sign approves
-  matching sign requests immediately. Confirm sign puts them in the pending
-  approval queue.
-</div>
- 
+        <q-input
+          filled
+          dense
+          v-model.trim="urlDataFormDialog.data.name"
+          label="Name"
+          hint="  (optional)"
+        ></q-input>
+        <q-select
+          v-if="!urlDataFormDialog.data.id"
+          filled
+          dense
+          v-model="urlDataFormDialog.bunkersData"
+          :options="
+            bunkersDataList.map(x => ({label: x.name || x.id, value: x.id}))
+          "
+          label="Bunker"
+        ></q-select>
+        <div class="text-subtitle2 q-mt-sm">Client capabilities</div>
+        <q-option-group
+          v-model="urlDataFormDialog.data.capabilities"
+          :options="capabilityOptions"
+          type="checkbox"
+          color="primary"
+        ></q-option-group>
+        <div class="text-caption text-grey q-mt-xs q-mb-sm">
+          Pick what this client should be able to do. The bunker will translate
+          these into the underlying NIP-46 permissions automatically.
+        </div>
+        <q-select
+          filled
+          dense
+          multiple
+          use-input
+          use-chips
+          new-value-mode="add-unique"
+          :options="relayOptions"
+          v-model="urlDataFormDialog.data.relays"
+          label="Relay URLs"
+          hint="Required for the bunker:// invite URL"
+        ></q-select>
+        <q-expansion-item
+          dense
+          dense-toggle
+          icon="tune"
+          label="Advanced NIP-46 permissions"
+          class="q-mb-sm"
+        >
+          <q-select
+            filled
+            dense
+            multiple
+            use-input
+            use-chips
+            new-value-mode="add-unique"
+            :options="permissionOptions"
+            v-model="urlDataFormDialog.data.permissions"
+            label="Raw permissions"
+            hint="Optional advanced override, for example sign_event:30023"
+          ></q-select>
+        </q-expansion-item>
+        <q-input
+          filled
+          dense
+          v-model.trim="urlDataFormDialog.data.secret"
+          label="Secret"
+          hint="Optional shared secret returned during connect"
+        ></q-input>
+        <q-input
+          filled
+          dense
+          type="datetime-local"
+          v-model="urlDataFormDialog.data.expires_at"
+          label="Expires at"
+          hint="Optional expiration for this bunker URL"
+        ></q-input>
+        <q-input
+          filled
+          dense
+          type="number"
+          min="0"
+          v-model.number="urlDataFormDialog.data.post_rate_limit_per_day"
+          label="Post rate limit per day"
+          hint="Maximum write actions allowed per day"
+        ></q-input>
+        <q-option-group
+          v-model="urlDataFormDialog.data.signing_mode"
+          :options="signingModeOptions"
+          color="primary"
+          inline
+          dense
+        ></q-option-group>
+        <div class="text-caption text-grey q-mt-xs">
+          Read and write access are derived from the capabilities above. Auto
+          sign approves matching sign requests immediately. Confirm sign puts
+          them in the pending approval queue.
+        </div>
+
         <div class="row q-mt-lg">
           <q-btn @click="saveUrlData" unelevated color="primary">
             <span v-if="urlDataFormDialog.data.id">Update</span>

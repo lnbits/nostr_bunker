@@ -80,7 +80,7 @@ async def api_update_bunkers_data(
     if bunkers_data.user_id != account_id.id:
         raise HTTPException(HTTPStatus.FORBIDDEN, "You do not own this bunkers data.")
     try:
-        bunkers_data = await update_bunkers_data(BunkersData(**{**bunkers_data.dict(), **data.dict()}))
+        bunkers_data = await update_bunkers_data(BunkersData(**{**bunkers_data.model_dump(), **data.model_dump()}))
     except ValueError as exc:
         raise HTTPException(HTTPStatus.BAD_REQUEST, str(exc)) from exc
     mark_runtime_state_dirty()
@@ -200,7 +200,7 @@ async def api_update_url_data(
     if not bunkers_data:
         raise HTTPException(HTTPStatus.NOT_FOUND, "Bunkers Data not found.")
 
-    url_data = await update_url_data(UrlData(**{**url_data.dict(), **data.dict()}))
+    url_data = await update_url_data(UrlData(**{**url_data.model_dump(), **data.model_dump()}))
     mark_runtime_state_dirty()
     return enrich_url_data(url_data, bunkers_data)
 

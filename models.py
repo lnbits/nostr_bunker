@@ -2,17 +2,18 @@ from datetime import datetime, timezone
 
 from lnbits.db import FilterModel
 from lnbits.utils.nostr import normalize_private_key
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 from .helpers import validate_relay_urls
 
 
 ########################### Bunkers Data ############################
 class CreateBunkersData(BaseModel):
-    name: str | None
-    nsec: str | None
+    name: str | None = None
+    nsec: str | None = None
 
-    @validator("nsec")
+    @field_validator("nsec")
+    @classmethod
     def validate_nsec(cls, value: str | None) -> str | None:
         if value is None or not value.strip():
             raise ValueError("nsec is required.")
@@ -23,8 +24,8 @@ class CreateBunkersData(BaseModel):
 class BunkersData(BaseModel):
     id: str
     user_id: str
-    name: str | None
-    nsec: str | None
+    name: str | None = None
+    nsec: str | None = None
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -43,15 +44,15 @@ class BunkersDataFilters(FilterModel):
         "updated_at",
     ]
 
-    created_at: datetime | None
-    updated_at: datetime | None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 ################################# Url Data ###########################
 
 
 class CreateUrlData(BaseModel):
-    name: str | None
+    name: str | None = None
     relays: list[str] = Field(default_factory=list)
     permissions: list[str] = Field(default_factory=list)
     auto_sign: bool = False
@@ -62,17 +63,20 @@ class CreateUrlData(BaseModel):
     post_rate_limit_per_day: int | None = None
     secret: str | None = None
 
-    @validator("post_rate_limit_per_day")
+    @field_validator("post_rate_limit_per_day")
+    @classmethod
     def validate_rate_limit(cls, value: int | None) -> int | None:
         if value is not None and value < 0:
             raise ValueError("post_rate_limit_per_day must be 0 or greater.")
         return value
 
-    @validator("relays")
+    @field_validator("relays")
+    @classmethod
     def validate_relays(cls, value: list[str]) -> list[str]:
         return validate_relay_urls(value)
 
-    @validator("secret")
+    @field_validator("secret")
+    @classmethod
     def normalize_secret(cls, value: str | None) -> str | None:
         if value is None:
             return None
@@ -83,7 +87,7 @@ class CreateUrlData(BaseModel):
 class UrlData(BaseModel):
     id: str
     bunkers_data_id: str
-    name: str | None
+    name: str | None = None
     relays: list[str] = Field(default_factory=list)
     permissions: list[str] = Field(default_factory=list)
     auto_sign: bool = False
@@ -94,8 +98,8 @@ class UrlData(BaseModel):
     post_rate_limit_per_day: int | None = None
     secret: str | None = None
     client_pubkey: str | None = None
-    remote_signer_pubkey: str | None = Field(default=None, no_database=True)
-    bunker_url: str | None = Field(default=None, no_database=True)
+    remote_signer_pubkey: str | None = Field(default=None, json_schema_extra={"no_database": True})
+    bunker_url: str | None = Field(default=None, json_schema_extra={"no_database": True})
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -122,8 +126,8 @@ class UrlDataFilters(FilterModel):
         "updated_at",
     ]
 
-    created_at: datetime | None
-    updated_at: datetime | None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 ############################ Signing Requests ############################
@@ -141,7 +145,8 @@ class UpdateSigningRequest(BaseModel):
     signed_event: dict | None = None
     error: str | None = None
 
-    @validator("status")
+    @field_validator("status")
+    @classmethod
     def validate_status(cls, value: str) -> str:
         normalized = value.strip().lower()
         allowed = {"pending", "approved", "signed", "rejected", "error"}
@@ -181,5 +186,5 @@ class SigningRequestFilters(FilterModel):
         "updated_at",
     ]
 
-    created_at: datetime | None
-    updated_at: datetime | None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None

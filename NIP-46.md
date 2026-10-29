@@ -1,8 +1,6 @@
-NIP-46
-======
+# NIP-46
 
-Nostr Remote Signing
---------------------
+## Nostr Remote Signing
 
 ## Changes
 
@@ -64,7 +62,7 @@ Here's an example:
 nostrconnect://83f3b2ae6aa368e8275397b9c26cf550101d63ebaab900d19dd4a4429f5ad8f5?relay=wss%3A%2F%2Frelay1.example.com&perms=nip44_encrypt%2Cnip44_decrypt%2Csign_event%3A13%2Csign_event%3A14%2Csign_event%3A1059&name=My+Client&secret=0s8j2djs&relay=wss%3A%2F%2Frelay2.example2.com
 ```
 
-_user_ passes this token to _remote-signer_, which then sends `connect` *response* event to the `client-pubkey` via the specified relays. Client discovers `remote-signer-pubkey` from connect response author. `secret` value MUST be provided to avoid connection spoofing, _client_ MUST validate the `secret` returned by `connect` response.
+_user_ passes this token to _remote-signer_, which then sends `connect` _response_ event to the `client-pubkey` via the specified relays. Client discovers `remote-signer-pubkey` from connect response author. `secret` value MUST be provided to avoid connection spoofing, _client_ MUST validate the `secret` returned by `connect` response.
 
 ## Request Events `kind: 24133`
 
@@ -95,17 +93,17 @@ The `content` field is a JSON-RPC-like message that is [NIP-44](44.md) encrypted
 
 Each of the following are methods that the _client_ sends to the _remote-signer_.
 
-| Command                  | Params                                                                        | Result                                                                 |
-| ------------------------ | -------------------------------------------------                             | ---------------------------------------------------------------------- |
-| `connect`                | `[<remote-signer-pubkey>, <optional_secret>, <optional_requested_perms>]`     | `"ack"` OR `<required-secret-value>`                                   |
-| `sign_event`             | `[<{kind, content, tags, created_at}>]`                                       | `json_stringified(<signed_event>)`                                     |
-| `ping`                   | `[]`                                                                          | `"pong"`                                                               |
-| `get_public_key`         | `[]`                                                                          | `<user-pubkey>`                                                        |
-| `nip04_encrypt`          | `[<third_party_pubkey>, <plaintext_to_encrypt>]`                              | `<nip04_ciphertext>`                                                   |
-| `nip04_decrypt`          | `[<third_party_pubkey>, <nip04_ciphertext_to_decrypt>]`                       | `<plaintext>`                                                          |
-| `nip44_encrypt`          | `[<third_party_pubkey>, <plaintext_to_encrypt>]`                              | `<nip44_ciphertext>`                                                   |
-| `nip44_decrypt`          | `[<third_party_pubkey>, <nip44_ciphertext_to_decrypt>]`                       | `<plaintext>`                                                          |
-| `switch_relays`          | `[]`                                                                          | `["<relay-url>", "<relay-url>", ...]` OR `null`                        |
+| Command          | Params                                                                    | Result                                          |
+| ---------------- | ------------------------------------------------------------------------- | ----------------------------------------------- |
+| `connect`        | `[<remote-signer-pubkey>, <optional_secret>, <optional_requested_perms>]` | `"ack"` OR `<required-secret-value>`            |
+| `sign_event`     | `[<{kind, content, tags, created_at}>]`                                   | `json_stringified(<signed_event>)`              |
+| `ping`           | `[]`                                                                      | `"pong"`                                        |
+| `get_public_key` | `[]`                                                                      | `<user-pubkey>`                                 |
+| `nip04_encrypt`  | `[<third_party_pubkey>, <plaintext_to_encrypt>]`                          | `<nip04_ciphertext>`                            |
+| `nip04_decrypt`  | `[<third_party_pubkey>, <nip04_ciphertext_to_decrypt>]`                   | `<plaintext>`                                   |
+| `nip44_encrypt`  | `[<third_party_pubkey>, <plaintext_to_encrypt>]`                          | `<nip44_ciphertext>`                            |
+| `nip44_decrypt`  | `[<third_party_pubkey>, <nip44_ciphertext_to_decrypt>]`                   | `<plaintext>`                                   |
+| `switch_relays`  | `[]`                                                                      | `["<relay-url>", "<relay-url>", ...]` OR `null` |
 
 ### Requested permissions
 
@@ -188,7 +186,6 @@ The `content` field is a JSON-RPC-like message that is [NIP-44](44.md) encrypted
 
 ![signing-example](https://i.nostr.build/P3gW.png)
 
-
 ## Auth Challenges
 
 An Auth Challenge is a response that a _remote-signer_ can send back when it needs the _user_ to authenticate via other means. The response `content` object will take the following form:
@@ -212,6 +209,7 @@ _client_ should display (in a popup or new tab) the URL from the `error` field a
 ### Announcing _remote-signer_ metadata
 
 _remote-signer_ MAY publish its metadata by using [NIP-05](05.md) and [NIP-89](89.md). With NIP-05, a request to `<remote-signer>/.well-known/nostr.json?name=_` MAY return this:
+
 ```jsonc
 {
     "names":{

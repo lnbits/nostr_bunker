@@ -4,7 +4,7 @@ import re
 from urllib.parse import quote
 
 from coincurve import PrivateKey
-from lnbits.utils.nostr import normalize_private_key, is_ws_url
+from lnbits.utils.nostr import is_ws_url, normalize_private_key
 
 
 def is_valid_email_address(email: str) -> bool:

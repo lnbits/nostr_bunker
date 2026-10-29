@@ -1,11 +1,13 @@
 import json
+from typing import cast
 from uuid import uuid4
 
 import pytest
 from coincurve import PrivateKey
 from fastapi.exceptions import HTTPException
+from lnbits.core.models.users import AccountId
 from lnbits.utils.nostr import sign_event
-from nostr_sdk import Keys, Nip44Version, PublicKey, SecretKey, nip44_decrypt, nip44_encrypt
+from nostr_sdk import Keys, Nip44Version, PublicKey, SecretKey, nip44_decrypt, nip44_encrypt  # type: ignore[import-untyped]
 
 from nostr_bunker.crud import (  # type: ignore[import]
     create_bunkers_data,
@@ -60,7 +62,7 @@ async def test_create_and_get_bunkers_data():
     assert bunkers_data_one.id is not None
     assert bunkers_data_one.user_id == user_id
 
-    bunkers_data_one = await get_bunkers_data(user_id, bunkers_data_one.id)
+    bunkers_data_one = cast(BunkersData, await get_bunkers_data(user_id, bunkers_data_one.id))
     assert bunkers_data_one.id is not None
     assert bunkers_data_one.user_id == user_id
     assert bunkers_data_one.name == data.name
@@ -103,7 +105,7 @@ async def test_update_bunkers_data():
     assert bunkers_data_one.id is not None
     assert bunkers_data_one.user_id == user_id
 
-    bunkers_data_one = await get_bunkers_data(user_id, bunkers_data_one.id)
+    bunkers_data_one = cast(BunkersData, await get_bunkers_data(user_id, bunkers_data_one.id))
     assert bunkers_data_one.id is not None
     assert bunkers_data_one.user_id == user_id
     assert bunkers_data_one.name == data.name
@@ -116,7 +118,7 @@ async def test_update_bunkers_data():
     bunkers_data_updated = BunkersData(**{**bunkers_data_one.dict(), **data_updated.dict()})
 
     await update_bunkers_data(bunkers_data_updated)
-    bunkers_data_one = await get_bunkers_data_by_id(bunkers_data_one.id)
+    bunkers_data_one = cast(BunkersData, await get_bunkers_data_by_id(bunkers_data_one.id))
     assert bunkers_data_one.name == bunkers_data_updated.name
     assert bunkers_data_one.nsec == bunkers_data_updated.nsec
 
@@ -142,7 +144,7 @@ async def test_update_bunkers_data_rejects_duplicate_nsec():
     with pytest.raises(ValueError, match="already exists"):
         await update_bunkers_data(duplicate_bunker)
 
-    fetched = await get_bunkers_data_by_id(second_bunker.id)
+    fetched = cast(BunkersData, await get_bunkers_data_by_id(second_bunker.id))
     assert fetched.nsec == second_secret_hex
 
 
@@ -635,7 +637,7 @@ async def test_delete_bunker_requires_clear_flag_when_urls_exist():
         ),
     )
 
-    account = type("Account", (), {"id": user_id})()
+    account = cast(AccountId, type("Account", (), {"id": user_id})())
     with pytest.raises(HTTPException) as exc:
         await api_delete_bunkers_data(bunker.id, False, account)
     assert exc.value.status_code == 409

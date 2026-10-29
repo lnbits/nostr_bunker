@@ -3,12 +3,13 @@ import json
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from importlib import import_module
 
 from coincurve import PrivateKey
 from lnbits.core.models import Payment
 from lnbits.utils.nostr import json_dumps, normalize_private_key, sign_event
 from loguru import logger
-from nostr_sdk import (
+from nostr_sdk import (  # type: ignore[import-untyped]
     Event,
     Nip44Version,
     PublicKey,
@@ -20,10 +21,12 @@ from nostr_sdk import (
 )
 
 try:
-    from lnbits.extensions.nostrclient.router import NostrRouter, nostr_client
+    _nostr_router = import_module("lnbits.extensions.nostrclient.router")
+    NostrRouter, nostr_client = _nostr_router.NostrRouter, _nostr_router.nostr_client
 except ModuleNotFoundError:
     try:
-        from nostrclient.router import NostrRouter, nostr_client  # type: ignore[import]
+        _nostr_router = import_module("nostrclient.router")
+        NostrRouter, nostr_client = _nostr_router.NostrRouter, _nostr_router.nostr_client
     except ModuleNotFoundError:
 
         class _FallbackRelayManager:
@@ -42,9 +45,10 @@ except ModuleNotFoundError:
         class _FallbackNostrClient:
             relay_manager = _FallbackRelayManager()
 
-        class NostrRouter:
+        class _FallbackNostrRouter:
             received_subscription_events: dict[str, list] = {}
 
+        NostrRouter = _FallbackNostrRouter
         nostr_client = _FallbackNostrClient()
 
 from .crud import (
@@ -195,13 +199,7 @@ async def _handle_request_event(event_dict: dict) -> None:
     if event_dict.get("kind") != NIP46_KIND:
         return
 
-    event_json = json.dumps(event_dict, separators=(",", ":"))
-    try:
-        if not Event.from_json(event_json).verify():
-            logger.warning("[nostr_bunker] Ignoring NIP-46 event with invalid signature.")
-            return
-    except Exception as exc:
-        logger.warning(f"[nostr_bunker] Failed to verify NIP-46 event: {exc}")
+    if not _verify_request_event(event_dict):
         return
 
     remote_signer_pubkey = _extract_first_p_tag(event_dict.get("tags", []))
@@ -250,44 +248,7 @@ async def _handle_request_event(event_dict: dict) -> None:
         )
         return
 
-    try:
-        result = await _dispatch_request(
-            bunker=bunker,
-            url_data=url_data,
-            client_pubkey=client_pubkey,
-            request_id=request_id,
-            method=method,
-            params=params,
-        )
-    except PermissionError as exc:
-        await _publish_response(
-            bunkers_data=bunker,
-            url_data=url_data,
-            client_pubkey=client_pubkey,
-            request_id=request_id,
-            error=str(exc),
-        )
-        return
-    except Exception as exc:
-        await _publish_response(
-            bunkers_data=bunker,
-            url_data=url_data,
-            client_pubkey=client_pubkey,
-            request_id=request_id,
-            error=str(exc),
-        )
-        return
-
-    if result is None:
-        return
-
-    await _publish_response(
-        bunkers_data=bunker,
-        url_data=url_data,
-        client_pubkey=client_pubkey,
-        request_id=request_id,
-        result=result,
-    )
+    await _dispatch_and_publish_response(bunker, url_data, client_pubkey, request_id, method, params)
 
 
 def _decrypt_request_payload(
@@ -385,47 +346,7 @@ async def _dispatch_request(
         return nip44_decrypt(_get_secret_key(bunker), third_party_pubkey, str(params[1]))
 
     if method == "sign_event":
-        unsigned_event = _parse_unsigned_event_param(params)
-        kind = int(unsigned_event.get("kind", 0))
-        _assert_method_allowed(url_data, method, kind=kind)
-        await _assert_post_rate_limit(url_data, kind)
-
-        existing_request = await get_signing_request_by_request_id(url_data.id, request_id)
-        if existing_request:
-            if existing_request.status == "signed" and existing_request.signed_event:
-                return json.dumps(existing_request.signed_event, separators=(",", ":"))
-            if existing_request.status == "rejected":
-                raise PermissionError(existing_request.error or "Signing request rejected.")
-            return None
-
-        signing_request = await create_signing_request(
-            url_data.id,
-            CreateSigningRequest(
-                request_id=request_id,
-                client_pubkey=client_pubkey,
-                event=unsigned_event,
-            ),
-        )
-
-        if url_data.auto_sign:
-            signed_event = _sign_event_payload(bunker, unsigned_event)
-            await update_signing_request(
-                signing_request,
-                UpdateSigningRequest(status="signed", signed_event=signed_event),
-            )
-            return json.dumps(signed_event, separators=(",", ":"))
-
-        if url_data.confirm_sign:
-            return None
-
-        await update_signing_request(
-            signing_request,
-            UpdateSigningRequest(
-                status="rejected",
-                error="This bunker URL is not allowed to sign events.",
-            ),
-        )
-        raise PermissionError("This bunker URL is not allowed to sign events.")
+        return await _handle_sign_event(bunker, url_data, client_pubkey, request_id, params)
 
     raise PermissionError(f"Unsupported NIP-46 method: {method}")
 
@@ -572,3 +493,114 @@ def _extract_first_p_tag(tags: list[list[str]]) -> str | None:
         if len(tag) >= 2 and tag[0] == "p":
             return tag[1]
     return None
+
+
+def _verify_request_event(event_dict: dict) -> bool:
+    event_json = json.dumps(event_dict, separators=(",", ":"))
+    try:
+        if not Event.from_json(event_json).verify():
+            logger.warning("[nostr_bunker] Ignoring NIP-46 event with invalid signature.")
+            return False
+    except Exception as exc:
+        logger.warning(f"[nostr_bunker] Failed to verify NIP-46 event: {exc}")
+        return False
+    return True
+
+
+async def _handle_sign_event(
+    bunker: BunkersData,
+    url_data: UrlData,
+    client_pubkey: str,
+    request_id: str,
+    params: list,
+) -> str | None:
+    method = "sign_event"
+    unsigned_event = _parse_unsigned_event_param(params)
+    kind = int(unsigned_event.get("kind", 0))
+    _assert_method_allowed(url_data, method, kind=kind)
+    await _assert_post_rate_limit(url_data, kind)
+
+    existing_request = await get_signing_request_by_request_id(url_data.id, request_id)
+    if existing_request:
+        if existing_request.status == "signed" and existing_request.signed_event:
+            return json.dumps(existing_request.signed_event, separators=(",", ":"))
+        if existing_request.status == "rejected":
+            raise PermissionError(existing_request.error or "Signing request rejected.")
+        return None
+
+    signing_request = await create_signing_request(
+        url_data.id,
+        CreateSigningRequest(
+            request_id=request_id,
+            client_pubkey=client_pubkey,
+            event=unsigned_event,
+        ),
+    )
+
+    if url_data.auto_sign:
+        signed_event = _sign_event_payload(bunker, unsigned_event)
+        await update_signing_request(
+            signing_request,
+            UpdateSigningRequest(status="signed", signed_event=signed_event),
+        )
+        return json.dumps(signed_event, separators=(",", ":"))
+
+    if url_data.confirm_sign:
+        return None
+
+    await update_signing_request(
+        signing_request,
+        UpdateSigningRequest(
+            status="rejected",
+            error="This bunker URL is not allowed to sign events.",
+        ),
+    )
+    raise PermissionError("This bunker URL is not allowed to sign events.")
+
+
+async def _dispatch_and_publish_response(
+    bunker: BunkersData,
+    url_data: UrlData,
+    client_pubkey: str,
+    request_id: str,
+    method: str,
+    params: list,
+) -> None:
+    try:
+        result = await _dispatch_request(
+            bunker=bunker,
+            url_data=url_data,
+            client_pubkey=client_pubkey,
+            request_id=request_id,
+            method=method,
+            params=params,
+        )
+    except PermissionError as exc:
+        await _publish_response(
+            bunkers_data=bunker,
+            url_data=url_data,
+            client_pubkey=client_pubkey,
+            request_id=request_id,
+            error=str(exc),
+        )
+        return
+    except Exception as exc:
+        await _publish_response(
+            bunkers_data=bunker,
+            url_data=url_data,
+            client_pubkey=client_pubkey,
+            request_id=request_id,
+            error=str(exc),
+        )
+        return
+
+    if result is None:
+        return
+
+    await _publish_response(
+        bunkers_data=bunker,
+        url_data=url_data,
+        client_pubkey=client_pubkey,
+        request_id=request_id,
+        result=result,
+    )
