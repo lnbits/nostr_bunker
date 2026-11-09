@@ -9,7 +9,7 @@ from .helpers import validate_relay_urls
 
 ########################### Bunkers Data ############################
 class CreateBunkersData(BaseModel):
-    name: str | None
+    name: str | None = None
     nsec: str | None
 
     @validator("nsec")
@@ -51,7 +51,7 @@ class BunkersDataFilters(FilterModel):
 
 
 class CreateUrlData(BaseModel):
-    name: str | None
+    name: str | None = None
     relays: list[str] = Field(default_factory=list)
     permissions: list[str] = Field(default_factory=list)
     auto_sign: bool = False
