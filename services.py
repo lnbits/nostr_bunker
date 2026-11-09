@@ -1,11 +1,14 @@
 import asyncio
 import json
+import sys
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from types import ModuleType
 
 from coincurve import PrivateKey
 from lnbits.core.models import Payment
+from lnbits.settings import settings
 from lnbits.utils.nostr import json_dumps, normalize_private_key, sign_event
 from loguru import logger
 from nostr_sdk import (
@@ -18,34 +21,6 @@ from nostr_sdk import (
     nip44_decrypt,
     nip44_encrypt,
 )
-
-try:
-    from lnbits.extensions.nostrclient.router import NostrRouter, nostr_client
-except ModuleNotFoundError:
-    try:
-        from nostrclient.router import NostrRouter, nostr_client  # type: ignore[import]
-    except ModuleNotFoundError:
-
-        class _FallbackRelayManager:
-            def add_relay(self, *_args, **_kwargs):
-                return None
-
-            def add_subscription(self, *_args, **_kwargs):
-                return None
-
-            def close_subscription(self, *_args, **_kwargs):
-                return None
-
-            def publish_message(self, *_args, **_kwargs):
-                return None
-
-        class _FallbackNostrClient:
-            relay_manager = _FallbackRelayManager()
-
-        class NostrRouter:
-            received_subscription_events: dict[str, list] = {}
-
-        nostr_client = _FallbackNostrClient()
 
 from .crud import (
     create_signing_request,
@@ -71,6 +46,7 @@ REFRESH_INTERVAL_SECONDS = 30
 
 @dataclass
 class RuntimeState:
+    router: ModuleType | None = field(default=None, repr=False)
     subscribed_pubkeys: set[str] = field(default_factory=set)
     ensured_relays: set[str] = field(default_factory=set)
     next_refresh_at: float = 0
@@ -89,12 +65,16 @@ async def payment_received_for_url_data(payment: Payment) -> bool:
 
 
 async def run_nip46_runtime() -> None:
-    while True:
+    logger.info("[nostr_bunker] Starting NIP-46 listener.")
+    while settings.lnbits_running:
         try:
             await _refresh_runtime_state()
             await _process_subscription_events()
         except Exception as exc:
-            logger.warning(f"[nostr_bunker] NIP-46 runtime error: {exc}")
+            logger.warning(
+                "[nostr_bunker] NIP-46 listener failed ({}); ensure Nostrclient is enabled and running.",
+                type(exc).__name__,
+            )
             await asyncio.sleep(1)
         await asyncio.sleep(0.2)
 
@@ -146,6 +126,13 @@ async def complete_signing_request_action(
 
 
 async def _refresh_runtime_state() -> None:
+    router = _get_nostrclient_router()
+    if router is not runtime_state.router:
+        runtime_state.router = router
+        runtime_state.subscribed_pubkeys.clear()
+        runtime_state.ensured_relays.clear()
+        runtime_state.next_refresh_at = 0
+    relay_manager = router.nostr_client.relay_manager
     now = time.time()
     if now < runtime_state.next_refresh_at:
         return
@@ -160,25 +147,31 @@ async def _refresh_runtime_state() -> None:
                 if relay in runtime_state.ensured_relays:
                     continue
                 try:
-                    nostr_client.relay_manager.add_relay(relay)
+                    relay_manager.add_relay(relay)
                     runtime_state.ensured_relays.add(relay)
                 except Exception as exc:
                     logger.warning(f"[nostr_bunker] Failed to add relay '{relay}': {exc}")
 
     if signer_pubkeys != runtime_state.subscribed_pubkeys:
-        nostr_client.relay_manager.close_subscription(SUBSCRIPTION_ID)
+        relay_manager.close_subscription(SUBSCRIPTION_ID)
         runtime_state.subscribed_pubkeys = signer_pubkeys
         if signer_pubkeys:
-            nostr_client.relay_manager.add_subscription(
+            relay_manager.add_subscription(
                 SUBSCRIPTION_ID,
                 [{"kinds": [NIP46_KIND], "#p": sorted(signer_pubkeys)}],
+            )
+            logger.info(
+                "[nostr_bunker] Subscribed for {} signer(s) across {} relay(s).",
+                len(signer_pubkeys),
+                len(runtime_state.ensured_relays),
             )
 
     runtime_state.next_refresh_at = now + REFRESH_INTERVAL_SECONDS
 
 
 async def _process_subscription_events() -> None:
-    events = NostrRouter.received_subscription_events.get(SUBSCRIPTION_ID)
+    router = _get_nostrclient_router()
+    events = router.NostrRouter.received_subscription_events.get(SUBSCRIPTION_ID)
     if not events:
         return
 
@@ -223,6 +216,7 @@ async def _handle_request_event(event_dict: dict) -> None:
     if not request_id or not method or not isinstance(params, list):
         return
 
+    logger.info("[nostr_bunker] Received NIP-46 request.")
     try:
         url_data = await _resolve_url_data(
             bunker=bunker,
@@ -438,6 +432,7 @@ async def _publish_response(
     result: str | None = None,
     error: str | None = None,
 ) -> None:
+    relay_manager = _get_nostrclient_router().nostr_client.relay_manager
     signer_pubkey = derive_remote_signer_pubkey(bunkers_data.nsec)
     if not signer_pubkey:
         raise ValueError("Bunker has no signer key configured.")
@@ -458,7 +453,7 @@ async def _publish_response(
             if relay in runtime_state.ensured_relays:
                 continue
             try:
-                nostr_client.relay_manager.add_relay(relay)
+                relay_manager.add_relay(relay)
                 runtime_state.ensured_relays.add(relay)
             except Exception as exc:
                 logger.warning(f"[nostr_bunker] Failed to add response relay '{relay}': {exc}")
@@ -474,7 +469,8 @@ async def _publish_response(
         signer_pubkey,
         _get_signing_private_key(bunkers_data),
     )
-    nostr_client.relay_manager.publish_message(json.dumps(["EVENT", signed_response]))
+    relay_manager.publish_message(json.dumps(["EVENT", signed_response]))
+    logger.info("[nostr_bunker] NIP-46 response queued for publication.")
 
 
 def _get_signing_private_key(bunker: BunkersData) -> PrivateKey:
@@ -572,3 +568,13 @@ def _extract_first_p_tag(tags: list[list[str]]) -> str | None:
         if len(tag) >= 2 and tag[0] == "p":
             return tag[1]
     return None
+
+
+def _get_nostrclient_router() -> ModuleType:
+    # Resolve the active module on use: LNbits replaces extension modules on reload.
+    # Importing Nostrclient here could create a second client before it is started.
+    prefix = "lnbits.extensions." if settings.has_default_extension_path else ""
+    router = sys.modules.get(f"{prefix}nostrclient.router")
+    if router is None or not router.nostr_client.running:
+        raise RuntimeError("Nostrclient must be enabled and running for NIP-46.")
+    return router

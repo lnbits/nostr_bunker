@@ -383,6 +383,7 @@
   filled
   dense
   v-model.trim="bunkersDataFormDialog.data.nsec"
+  type="password"
   label="Nsec"
   hint="  (optional)"
 ></q-input>

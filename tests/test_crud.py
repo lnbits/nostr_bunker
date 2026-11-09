@@ -1,9 +1,13 @@
 import json
+import sys
+from types import ModuleType, SimpleNamespace
+from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
 from coincurve import PrivateKey
 from fastapi.exceptions import HTTPException
+from lnbits.settings import settings
 from lnbits.utils.nostr import sign_event
 from nostr_sdk import Keys, Nip44Version, PublicKey, SecretKey, nip44_decrypt, nip44_encrypt
 
@@ -38,13 +42,29 @@ from nostr_bunker.models import (  # type: ignore[import]
 )
 from nostr_bunker.services import (  # type: ignore[import]
     _assert_post_rate_limit,
+    _get_nostrclient_router,
     _handle_request_event,
+    _process_subscription_events,
     _refresh_runtime_state,
     complete_signing_request_action,
     mark_runtime_state_dirty,
     runtime_state,
 )
 from nostr_bunker.views_api import api_delete_bunkers_data  # type: ignore[import]
+
+
+@pytest.fixture(autouse=True)
+def relay_router(monkeypatch):
+    prefix = "lnbits.extensions." if settings.has_default_extension_path else ""
+    router = ModuleType(f"{prefix}nostrclient.router")
+    router.nostr_client = SimpleNamespace(running=True, relay_manager=Mock())
+    router.NostrRouter = SimpleNamespace(received_subscription_events={})
+    monkeypatch.setitem(sys.modules, router.__name__, router)
+    monkeypatch.setattr(runtime_state, "router", None)
+    monkeypatch.setattr(runtime_state, "subscribed_pubkeys", set())
+    monkeypatch.setattr(runtime_state, "ensured_relays", set())
+    monkeypatch.setattr(runtime_state, "next_refresh_at", 0)
+    return router
 
 
 @pytest.mark.asyncio
@@ -289,7 +309,7 @@ async def test_create_and_update_signing_request():
 
 
 @pytest.mark.asyncio
-async def test_nip46_connect_and_auto_sign(monkeypatch):
+async def test_nip46_connect_and_auto_sign(monkeypatch, relay_router):
     bunker_keys = Keys.generate()
     client_keys = Keys.generate()
     bunker_secret_hex = bunker_keys.secret_key().to_hex()
@@ -316,11 +336,13 @@ async def test_nip46_connect_and_auto_sign(monkeypatch):
 
     published_messages = []
     monkeypatch.setattr(
-        "nostr_bunker.services.nostr_client.relay_manager.publish_message",
+        relay_router.nostr_client.relay_manager,
+        "publish_message",
         published_messages.append,
     )
     monkeypatch.setattr(
-        "nostr_bunker.services.nostr_client.relay_manager.add_relay",
+        relay_router.nostr_client.relay_manager,
+        "add_relay",
         lambda *_args, **_kwargs: None,
     )
 
@@ -391,7 +413,7 @@ async def test_nip46_connect_and_auto_sign(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_complete_signing_request_action_publishes_response(monkeypatch):
+async def test_complete_signing_request_action_publishes_response(monkeypatch, relay_router):
     bunker_keys = Keys.generate()
     client_keys = Keys.generate()
     bunker_secret_hex = bunker_keys.secret_key().to_hex()
@@ -431,11 +453,13 @@ async def test_complete_signing_request_action_publishes_response(monkeypatch):
 
     published_messages = []
     monkeypatch.setattr(
-        "nostr_bunker.services.nostr_client.relay_manager.publish_message",
+        relay_router.nostr_client.relay_manager,
+        "publish_message",
         published_messages.append,
     )
     monkeypatch.setattr(
-        "nostr_bunker.services.nostr_client.relay_manager.add_relay",
+        relay_router.nostr_client.relay_manager,
+        "add_relay",
         lambda *_args, **_kwargs: None,
     )
 
@@ -454,7 +478,7 @@ async def test_complete_signing_request_action_publishes_response(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_refresh_runtime_state_uses_structured_subscription_filters(monkeypatch):
+async def test_refresh_runtime_state_uses_structured_subscription_filters(monkeypatch, relay_router):
     bunker_keys = Keys.generate()
     bunker = await create_bunkers_data(
         uuid4().hex,
@@ -471,15 +495,18 @@ async def test_refresh_runtime_state_uses_structured_subscription_filters(monkey
 
     calls = {"subscription": None, "relays": []}
     monkeypatch.setattr(
-        "nostr_bunker.services.nostr_client.relay_manager.add_relay",
+        relay_router.nostr_client.relay_manager,
+        "add_relay",
         lambda relay: calls["relays"].append(relay),
     )
     monkeypatch.setattr(
-        "nostr_bunker.services.nostr_client.relay_manager.close_subscription",
+        relay_router.nostr_client.relay_manager,
+        "close_subscription",
         lambda sub_id: None,
     )
     monkeypatch.setattr(
-        "nostr_bunker.services.nostr_client.relay_manager.add_subscription",
+        relay_router.nostr_client.relay_manager,
+        "add_subscription",
         lambda sub_id, filters: calls.__setitem__("subscription", (sub_id, filters)),
     )
 
@@ -499,7 +526,7 @@ async def test_refresh_runtime_state_uses_structured_subscription_filters(monkey
 
 
 @pytest.mark.asyncio
-async def test_connect_can_rebind_url_to_new_client_pubkey(monkeypatch):
+async def test_connect_can_rebind_url_to_new_client_pubkey(monkeypatch, relay_router):
     bunker_keys = Keys.generate()
     bunker_secret_hex = bunker_keys.secret_key().to_hex()
     bunker_pubkey = bunker_keys.public_key().to_hex()
@@ -524,11 +551,13 @@ async def test_connect_can_rebind_url_to_new_client_pubkey(monkeypatch):
 
     published_messages = []
     monkeypatch.setattr(
-        "nostr_bunker.services.nostr_client.relay_manager.publish_message",
+        relay_router.nostr_client.relay_manager,
+        "publish_message",
         published_messages.append,
     )
     monkeypatch.setattr(
-        "nostr_bunker.services.nostr_client.relay_manager.add_relay",
+        relay_router.nostr_client.relay_manager,
+        "add_relay",
         lambda *_args, **_kwargs: None,
     )
 
@@ -642,6 +671,90 @@ async def test_delete_bunker_requires_clear_flag_when_urls_exist():
 
     response = await api_delete_bunkers_data(bunker.id, True, account)
     assert response.success is True
+
+
+@pytest.mark.asyncio
+async def test_reloaded_relay_service_receives_connect_and_publishes_reply(monkeypatch, relay_router):
+    bunker_keys = Keys.generate()
+    client_keys = Keys.generate()
+    bunker_pubkey = bunker_keys.public_key().to_hex()
+    bunker = await create_bunkers_data(
+        uuid4().hex,
+        CreateBunkersData(name="reload-bunker", nsec=bunker_keys.secret_key().to_hex()),
+    )
+    await create_url_data(
+        bunker.id,
+        CreateUrlData(relays=["wss://relay.example"], secret="reload-secret"),
+    )
+    await _refresh_runtime_state()
+    assert runtime_state.next_refresh_at > 0
+    old_subscriptions = relay_router.nostr_client.relay_manager.add_subscription.call_count
+
+    # LNbits removes and reimports Nostrclient's modules when registering its routes.
+    replacement = ModuleType(relay_router.__name__)
+    replacement.nostr_client = SimpleNamespace(running=True, relay_manager=Mock())
+    request = _build_nip46_request_event(
+        client_pubkey=client_keys.public_key().to_hex(),
+        client_secret_hex=client_keys.secret_key().to_hex(),
+        bunker_pubkey=bunker_pubkey,
+        payload={"id": "reload-connect", "method": "connect", "params": [bunker_pubkey, "reload-secret"]},
+    )
+    replacement.NostrRouter = SimpleNamespace(
+        received_subscription_events={"nostr_bunker_nip46": [SimpleNamespace(event=json.dumps(request))]}
+    )
+    monkeypatch.setitem(sys.modules, relay_router.__name__, replacement)
+
+    # The refresh timer and unchanged signer keys must not skip resubscription.
+    await _refresh_runtime_state()
+    manager = replacement.nostr_client.relay_manager
+    manager.add_relay.assert_called_with("wss://relay.example")
+    assert manager.add_subscription.call_count == 1
+    assert relay_router.nostr_client.relay_manager.add_subscription.call_count == old_subscriptions
+    await _process_subscription_events()
+    manager.publish_message.assert_called_once()
+    relay_router.nostr_client.relay_manager.publish_message.assert_not_called()
+    response = _decrypt_published_response(
+        manager.publish_message.call_args.args[0],
+        client_secret_hex=client_keys.secret_key().to_hex(),
+        bunker_pubkey=bunker_pubkey,
+    )
+    assert response == {"id": "reload-connect", "result": "reload-secret"}
+
+    identity_request = _build_nip46_request_event(
+        client_pubkey=client_keys.public_key().to_hex(),
+        client_secret_hex=client_keys.secret_key().to_hex(),
+        bunker_pubkey=bunker_pubkey,
+        payload={"id": "identity", "method": "get_public_key", "params": []},
+    )
+    replacement.NostrRouter.received_subscription_events["nostr_bunker_nip46"].append(
+        SimpleNamespace(event=json.dumps(identity_request))
+    )
+    await _process_subscription_events()
+    assert manager.publish_message.call_count == 2
+    response = _decrypt_published_response(
+        manager.publish_message.call_args.args[0],
+        client_secret_hex=client_keys.secret_key().to_hex(),
+        bunker_pubkey=bunker_pubkey,
+    )
+    assert response == {"id": "identity", "result": bunker_pubkey}
+
+
+@pytest.mark.parametrize("extension_path", ["lnbits", "/custom"])
+def test_router_resolves_active_extension_namespace(monkeypatch, relay_router, extension_path):
+    monkeypatch.setattr(settings, "lnbits_extensions_path", extension_path)
+    prefix = "lnbits.extensions." if extension_path == "lnbits" else ""
+    monkeypatch.setitem(sys.modules, f"{prefix}nostrclient.router", relay_router)
+    assert _get_nostrclient_router() is relay_router
+
+
+@pytest.mark.parametrize("missing", [True, False])
+def test_unavailable_relay_service_fails_explicitly(monkeypatch, relay_router, missing):
+    if missing:
+        monkeypatch.delitem(sys.modules, relay_router.__name__)
+    else:
+        relay_router.nostr_client.running = False
+    with pytest.raises(RuntimeError, match="Nostrclient must be enabled and running"):
+        _get_nostrclient_router()
 
 
 def _build_nip46_request_event(

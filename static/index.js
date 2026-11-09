@@ -63,7 +63,6 @@ window.PageNostrBunker = {
         loading: false,
         columns: [
           {"name": "name", "align": "left", "label": "Name", "field": "name", "sortable": true},
-          {"name": "nsec", "align": "left", "label": "Nsec", "field": "nsec", "sortable": true},
           {"name": "updated_at", "align": "left", "label": "Updated At", "field": "updated_at", "sortable": true},
           {"name": "id", "align": "left", "label": "ID", "field": "id", "sortable": true},
           
