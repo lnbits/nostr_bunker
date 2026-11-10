@@ -62,7 +62,6 @@ def relay_router(monkeypatch):
     monkeypatch.setitem(sys.modules, router.__name__, router)
     monkeypatch.setattr(runtime_state, "router", None)
     monkeypatch.setattr(runtime_state, "subscribed_pubkeys", set())
-    monkeypatch.setattr(runtime_state, "ensured_relays", set())
     monkeypatch.setattr(runtime_state, "next_refresh_at", 0)
     return router
 
@@ -511,12 +510,11 @@ async def test_refresh_runtime_state_uses_structured_subscription_filters(monkey
     )
 
     runtime_state.subscribed_pubkeys = set()
-    runtime_state.ensured_relays = set()
     runtime_state.next_refresh_at = 0
 
     await _refresh_runtime_state()
 
-    assert calls["relays"] == ["wss://relay.example"]
+    assert calls["relays"] == []
     assert calls["subscription"] is not None
     sub_id, filters = calls["subscription"]
     assert sub_id == "nostr_bunker_nip46"
@@ -707,7 +705,7 @@ async def test_reloaded_relay_service_receives_connect_and_publishes_reply(monke
     # The refresh timer and unchanged signer keys must not skip resubscription.
     await _refresh_runtime_state()
     manager = replacement.nostr_client.relay_manager
-    manager.add_relay.assert_called_with("wss://relay.example")
+    manager.add_relay.assert_not_called()
     assert manager.add_subscription.call_count == 1
     assert relay_router.nostr_client.relay_manager.add_subscription.call_count == old_subscriptions
     await _process_subscription_events()

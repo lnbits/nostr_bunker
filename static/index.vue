@@ -438,13 +438,11 @@
   filled
   dense
   multiple
-  use-input
   use-chips
-  new-value-mode="add-unique"
   :options="relayOptions"
   v-model="urlDataFormDialog.data.relays"
   label="Relay URLs"
-  hint="Required for the bunker:// invite URL"
+  :hint="relayOptions.length ? 'Select relays approved by the administrator' : 'Ask an administrator to configure relays in Nostrclient'"
 ></q-select>
 <q-expansion-item
   dense

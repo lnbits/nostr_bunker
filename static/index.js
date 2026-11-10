@@ -4,12 +4,7 @@ window.PageNostrBunker = {
   data: function () {
     return {
       currencyOptions: ['sat'],
-      relayOptions: [
-        'wss://relay.damus.io',
-        'wss://nos.lol',
-        'wss://relay.primal.net',
-        'wss://relay.nostr.band'
-      ],
+      relayOptions: [],
       permissionOptions: [
         'get_public_key',
         'ping',
@@ -561,6 +556,15 @@ window.PageNostrBunker = {
     dateFromNow(date) {
       return moment(date).fromNow()
     },
+    async fetchRelayOptions() {
+      this.relayOptions = []
+      try {
+        const response = await LNbits.api.request('GET', '/nostr_bunker/api/v1/relays')
+        this.relayOptions = response.data
+      } catch (error) {
+        LNbits.utils.notifyApiError(error)
+      }
+    },
     async fetchCurrencies() {
       try {
         const response = await LNbits.api.request('GET', '/api/v1/currencies')
@@ -574,6 +578,7 @@ window.PageNostrBunker = {
   //////LIFECYCLE FUNCTIONS RUNNING ON PAGE LOAD/////
   ///////////////////////////////////////////////////
   async created() {
+    this.fetchRelayOptions()
     this.fetchCurrencies()
     this.getBunkersData()
     this.getUrlData()

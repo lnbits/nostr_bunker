@@ -45,13 +45,26 @@ from .models import (
     UrlData,
     UrlDataFilters,
 )
-from .services import complete_signing_request_action, mark_runtime_state_dirty
+from .services import (
+    check_approved_relays,
+    complete_signing_request_action,
+    get_approved_relays,
+    mark_runtime_state_dirty,
+)
 
 bunkers_data_filters = parse_filters(BunkersDataFilters)
 url_data_filters = parse_filters(UrlDataFilters)
 signing_request_filters = parse_filters(SigningRequestFilters)
 
 nostr_bunker_api_router = APIRouter()
+
+
+@nostr_bunker_api_router.get("/api/v1/relays", dependencies=[Depends(check_account_id_exists)])
+async def api_get_approved_relays() -> list[str]:
+    try:
+        return await get_approved_relays()
+    except RuntimeError as exc:
+        raise HTTPException(HTTPStatus.SERVICE_UNAVAILABLE, str(exc)) from exc
 
 
 ############################# Bunkers Data #############################
@@ -175,6 +188,7 @@ async def api_create_url_data(
     if not bunkers_data:
         raise HTTPException(HTTPStatus.NOT_FOUND, "Bunkers Data not found.")
 
+    await _check_approved_relays(data.relays)
     url_data = await create_url_data(bunkers_data_id, data)
     mark_runtime_state_dirty()
     return enrich_url_data(url_data, bunkers_data)
@@ -200,6 +214,7 @@ async def api_update_url_data(
     if not bunkers_data:
         raise HTTPException(HTTPStatus.NOT_FOUND, "Bunkers Data not found.")
 
+    await _check_approved_relays(data.relays)
     url_data = await update_url_data(UrlData(**{**url_data.dict(), **data.dict()}))
     mark_runtime_state_dirty()
     return enrich_url_data(url_data, bunkers_data)
@@ -398,3 +413,12 @@ async def api_delete_signing_request(
     signing_request = await api_get_signing_request(signing_request_id, account_id)
     await delete_signing_request(signing_request.url_data_id, signing_request_id)
     return SimpleStatus(success=True, message="Signing Request Deleted")
+
+
+async def _check_approved_relays(relays: list[str]) -> None:
+    try:
+        await check_approved_relays(relays)
+    except ValueError as exc:
+        raise HTTPException(HTTPStatus.BAD_REQUEST, str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(HTTPStatus.SERVICE_UNAVAILABLE, str(exc)) from exc

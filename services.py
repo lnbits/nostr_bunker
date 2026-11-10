@@ -29,7 +29,6 @@ from .crud import (
     get_signing_request_by_id,
     get_signing_request_by_request_id,
     get_signing_requests_since,
-    get_url_data_by_bunkers_data_id,
     get_url_data_by_client_pubkey,
     get_url_data_by_id,
     get_url_data_by_secret,
@@ -48,7 +47,6 @@ REFRESH_INTERVAL_SECONDS = 30
 class RuntimeState:
     router: ModuleType | None = field(default=None, repr=False)
     subscribed_pubkeys: set[str] = field(default_factory=set)
-    ensured_relays: set[str] = field(default_factory=set)
     next_refresh_at: float = 0
 
 
@@ -62,6 +60,21 @@ def mark_runtime_state_dirty() -> None:
 async def payment_received_for_url_data(payment: Payment) -> bool:
     logger.info("Payment receive logic generation is disabled.")
     return True
+
+
+async def get_approved_relays() -> list[str]:
+    router = _get_nostrclient_router()
+    crud = sys.modules.get(router.__name__.rsplit(".", 1)[0] + ".crud")
+    if crud is None:
+        raise RuntimeError("Nostrclient must be enabled and running for NIP-46.")
+    # Only persisted admin configuration is authoritative, not runtime connections.
+    return sorted({relay.url for relay in await crud.get_relays() if relay.url})
+
+
+async def check_approved_relays(relays: list[str]) -> None:
+    approved_relays = await get_approved_relays()
+    if not relays or any(relay not in approved_relays for relay in relays):
+        raise ValueError("Select relays configured by an administrator in Nostrclient.")
 
 
 async def run_nip46_runtime() -> None:
@@ -130,7 +143,6 @@ async def _refresh_runtime_state() -> None:
     if router is not runtime_state.router:
         runtime_state.router = router
         runtime_state.subscribed_pubkeys.clear()
-        runtime_state.ensured_relays.clear()
         runtime_state.next_refresh_at = 0
     relay_manager = router.nostr_client.relay_manager
     now = time.time()
@@ -139,18 +151,6 @@ async def _refresh_runtime_state() -> None:
 
     bunkers = await get_all_bunkers_data()
     signer_pubkeys = {pubkey for pubkey in (derive_remote_signer_pubkey(bunker.nsec) for bunker in bunkers) if pubkey}
-
-    for bunker in bunkers:
-        url_rows = await get_url_data_by_bunkers_data_id(bunker.id)
-        for url_data in url_rows:
-            for relay in url_data.relays:
-                if relay in runtime_state.ensured_relays:
-                    continue
-                try:
-                    relay_manager.add_relay(relay)
-                    runtime_state.ensured_relays.add(relay)
-                except Exception as exc:
-                    logger.warning(f"[nostr_bunker] Failed to add relay '{relay}': {exc}")
 
     if signer_pubkeys != runtime_state.subscribed_pubkeys:
         relay_manager.close_subscription(SUBSCRIPTION_ID)
@@ -161,9 +161,8 @@ async def _refresh_runtime_state() -> None:
                 [{"kinds": [NIP46_KIND], "#p": sorted(signer_pubkeys)}],
             )
             logger.info(
-                "[nostr_bunker] Subscribed for {} signer(s) across {} relay(s).",
+                "[nostr_bunker] Subscribed for {} signer(s).",
                 len(signer_pubkeys),
-                len(runtime_state.ensured_relays),
             )
 
     runtime_state.next_refresh_at = now + REFRESH_INTERVAL_SECONDS
@@ -347,7 +346,8 @@ async def _dispatch_request(
         return "pong"
 
     if method == "switch_relays":
-        return json.dumps(url_data.relays, separators=(",", ":"))
+        approved_relays = await get_approved_relays()
+        return json.dumps([relay for relay in url_data.relays if relay in approved_relays], separators=(",", ":"))
 
     if method == "get_public_key":
         _assert_method_allowed(url_data, method)
@@ -447,16 +447,6 @@ async def _publish_response(
         json_dumps(payload),
         Nip44Version.V2,
     )
-
-    if url_data:
-        for relay in url_data.relays:
-            if relay in runtime_state.ensured_relays:
-                continue
-            try:
-                relay_manager.add_relay(relay)
-                runtime_state.ensured_relays.add(relay)
-            except Exception as exc:
-                logger.warning(f"[nostr_bunker] Failed to add response relay '{relay}': {exc}")
 
     response_event = {
         "kind": NIP46_KIND,
